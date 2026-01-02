@@ -11,7 +11,6 @@ use nom::bytes::tag;
 use nom::character::char;
 use nom::character::complete::digit0;
 use nom::combinator::{map, map_res, recognize};
-use nom::number::complete::double;
 use crate::lexer::variable::Variable;
 
 pub mod constant;
@@ -74,7 +73,7 @@ fn parse_variable(input: &str) -> IResult<&str, Variable> {
         nom::sequence::pair(first_char, rest_chars)
     );
 
-    map(var_parser, |s: &str| Variable { name: s.to_string() }).parse(input)
+    map(var_parser, |s: &str| Variable::new(s)).parse(input)
 }
 
 /// Parse a single token from the start of `input`, skipping leading whitespace.
@@ -83,25 +82,23 @@ pub fn parse_token(input: &str) -> IResult<&str, Token> {
     preceded(
         multispace0,
         alt((
-            map(parse_boolean, |b| Token::Constant(Constant::Boolean(b))),
-            map(parse_variable, |v| Token::Variable(v)),
-            map(parse_float, |n| Token::Constant(Constant::Number(Number::Float(n)))),
-            map(parse_integer, |n| Token::Constant(Constant::Number(Number::Integer(n)))),
-            map(parse_symbol, |s| Token::Symbol(s)),
+            map(parse_boolean, |b| Token::constant(Constant::boolean(b))),
+            map(parse_variable, |v| Token::variable(v)),
+            map(parse_float, |n| Token::constant(Constant::number(Number::float(n)))),
+            map(parse_integer, |n| Token::constant(Constant::number(Number::integer(n)))),
+            map(parse_symbol, |s| Token::symbol(s)),
         ))
     ).parse(input)
 }
 
 pub struct Lexer {
     remaining: String,
-    input: String,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
         Lexer {
             remaining: input.to_string(),
-            input: input.to_string(),
         }
     }
 

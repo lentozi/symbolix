@@ -23,6 +23,16 @@ pub struct Fraction {
     pub denominator: i64,   // 分母
 }
 
+impl Constant {
+    pub fn number(num: Number) -> Constant {
+        Constant::Number(num)
+    }
+
+    pub fn boolean(boolean: bool) -> Constant {
+        Constant::Boolean(boolean)
+    }
+}
+
 impl Fraction {
     // 初始化
     pub fn new(numerator: i64, denominator: i64) -> Fraction {
@@ -167,6 +177,15 @@ impl fmt::Display for Number {
             Number::Integer(i) => write!(f, "{}", i),
             Number::Float(fl) => write!(f, "{}", fl),
             Number::Fraction(frac) => write!(f, "{}", frac),
+        }
+    }
+}
+
+impl fmt::Display for Constant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Constant::Number(num) => write!(f, "{}", num),
+            Constant::Boolean(b) => write!(f, "{}", b),
         }
     }
 }
