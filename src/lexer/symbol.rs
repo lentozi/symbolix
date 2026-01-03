@@ -27,6 +27,39 @@ pub enum Symbol {
     LogicNot,    // !
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum Precedence {
+    Lowest = 0,
+    TERNARY,       //  :
+    Conditional,   // ?
+    LogicOr,       // ||
+    LogicAnd,      // &&
+    Equality,      // == !=
+    Relational,    // < > <= >=
+    Additive,      // + -
+    Multiplicative,// * / %
+    Power,         // ^
+    Unary,         // ! -
+    Primary,       // 变量、常量、括号
+}
+
+pub fn get_precedence(symbol: &Symbol) -> Precedence {
+    match symbol {
+        Symbol::ConditionalElse => Precedence::TERNARY,
+        Symbol::Conditional => Precedence::Conditional,
+        Symbol::LogicOr => Precedence::LogicOr,
+        Symbol::LogicAdd => Precedence::LogicAnd,
+        Symbol::Equal | Symbol::NotEqual => Precedence::Equality,
+        Symbol::LessThan | Symbol::GreaterThan | Symbol::LessEqual | Symbol::GreaterEqual => Precedence::Relational,
+        Symbol::Plus | Symbol::Minus => Precedence::Additive,
+        Symbol::Asterisk | Symbol::Slash | Symbol::Percent => Precedence::Multiplicative,
+        Symbol::Caret => Precedence::Power,
+        Symbol::LogicNot => Precedence::Unary,
+        _ => Precedence::Lowest,
+    }
+}
+
+
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

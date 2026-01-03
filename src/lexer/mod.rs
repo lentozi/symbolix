@@ -97,8 +97,9 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
+        let appended_input = format!(" {} ", input);
         Lexer {
-            remaining: input.to_string(),
+            remaining: appended_input.to_string(),
         }
     }
 
@@ -111,6 +112,19 @@ impl Lexer {
                 self.remaining = new_rest.trim_start().to_string();
                 Some(token)
             }
+            Err(e) => {
+                eprintln!("Error parsing token: {:?}", e);
+                None
+            }
+        }
+    }
+
+    pub fn peek_token(&self) -> Option<Token> {
+        if self.remaining.is_empty() {
+            return None;
+        }
+        match parse_token(self.remaining.as_str()) {
+            Ok((_, token)) => Some(token),
             Err(e) => {
                 eprintln!("Error parsing token: {:?}", e);
                 None
