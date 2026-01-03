@@ -40,7 +40,6 @@ pub enum Precedence {
     Multiplicative,// * / %
     Power,         // ^
     Unary,         // ! -
-    Primary,       // 变量、常量、括号
 }
 
 pub fn get_precedence(symbol: &Symbol) -> Precedence {
@@ -89,34 +88,6 @@ impl fmt::Display for Symbol {
 }
 
 impl Symbol {
-    // 自定义优先级（数值越大优先级越高）
-    fn precedence(&self) -> u8 {
-        match self {
-            Symbol::LeftParen
-            | Symbol::RightParen
-            | Symbol::Comma
-            | Symbol::Semicolon => 0,
-            Symbol::Conditional
-            | Symbol::ConditionalElse => 1,
-            Symbol::LogicOr => 2,
-            Symbol::LogicAdd => 3,
-            Symbol::Equal
-            | Symbol::NotEqual => 4,
-            Symbol::LessThan
-            | Symbol::GreaterThan
-            | Symbol::LessEqual
-            | Symbol::GreaterEqual => 5,
-            Symbol::Plus
-            | Symbol::Minus => 6,
-            Symbol::Asterisk
-            | Symbol::Slash => 7,
-            Symbol::Caret => 8,
-            Symbol::Percent
-            | Symbol::LogicNot => 9,
-
-        }
-    }
-
     // 枚举序号，用作优先级相等时的稳定比较
     fn ordinal(&self) -> u8 {
         match self {
@@ -153,7 +124,7 @@ impl PartialOrd for Symbol {
 
 impl Ord for Symbol {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let p = self.precedence().cmp(&other.precedence());
+        let p = get_precedence(self).cmp(&get_precedence(other));
         if p != std::cmp::Ordering::Equal {
             return p;
         }
