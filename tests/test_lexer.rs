@@ -53,12 +53,12 @@ fn test_ternary_expression() {
 
 #[test]
 fn test_logical_expression() {
-    let input = "a && b || !c";
+    let input = "a && true || !c";
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
         Token::Variable(Variable::new("a")),
         Token::Symbol(Symbol::LogicAdd),
-        Token::Variable(Variable::new("b")),
+        Token::Constant(Constant::boolean(true)),
         Token::Symbol(Symbol::LogicOr),
         Token::Symbol(Symbol::LogicNot),
         Token::Variable(Variable::new("c")),
