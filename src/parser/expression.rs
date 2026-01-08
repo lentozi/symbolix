@@ -15,6 +15,8 @@ pub enum Expression {
     BinaryExpression(Box<Expression>, Symbol, Box<Expression>),
     // 三元表达式
     TernaryExpression(Box<Expression>, Symbol, Box<Expression>, Symbol, Box<Expression>),
+    // 关系表达式
+    Relation(Box<Expression>, Symbol, Box<Expression>),
 }
 
 impl Expression {
@@ -33,6 +35,10 @@ impl Expression {
     pub fn binary(left: Expression, symbol: Symbol, right: Expression) -> Expression {
         Expression::BinaryExpression(Box::new(left), symbol, Box::new(right))
     }
+    
+    pub fn relation(left: Expression, symbol: Symbol, right: Expression) -> Expression {
+        Expression::Relation(Box::new(left), symbol, Box::new(right))
+    }
 
     pub fn ternary(cond: Expression, qmark: Symbol, then_expr: Expression, colon: Symbol, else_expr: Expression) -> Expression {
         Expression::TernaryExpression(Box::new(cond), qmark, Box::new(then_expr), colon, Box::new(else_expr))
@@ -45,7 +51,8 @@ impl fmt::Display for Expression {
             Expression::Constant(c) => write!(f, "{}", c),
             Expression::Variable(v) => write!(f, "{}", v),
             Expression::UnaryExpression(op, expr) => write!(f, "({} {})", op, expr),
-            Expression::BinaryExpression(left, op, right) => write!(f, "({} {} {})", left, op, right),
+            Expression::BinaryExpression(left, op, right) | 
+            Expression::Relation(left, op, right) => write!(f, "({} {} {})", left, op, right),
             Expression::TernaryExpression(cond, qmark, then_expr, colon, else_expr) => {
                 write!(f, "({} {} {} {} {})", cond, qmark, then_expr, colon, else_expr)
             }

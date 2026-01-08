@@ -2,7 +2,7 @@ pub mod expression;
 
 use crate::lexer::token::Token;
 use crate::lexer::Lexer;
-use crate::lexer::symbol::{get_precedence, Precedence, Symbol};
+use crate::lexer::symbol::{get_precedence, get_symbol_type, Precedence, Symbol, SymbolType};
 use crate::parser::expression::Expression;
 
 pub fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
@@ -52,7 +52,11 @@ pub fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expressio
 
         lexer.next_token(); // consume operator
         let right = pratt_parsing(lexer, get_precedence(&operation));
-        left_expr = Expression::binary(left_expr, operation, right);
+        left_expr = match get_symbol_type(&operation) {
+            SymbolType::Relational => Expression::relation(left_expr, operation, right),
+            SymbolType::Arithmetic | SymbolType::Logical => Expression::binary(left_expr, operation, right),
+            _ => panic!("unsupported operator '{}'", operation),
+        };
     }
 
     left_expr

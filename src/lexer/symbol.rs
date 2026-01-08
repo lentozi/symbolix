@@ -58,6 +58,25 @@ pub fn get_precedence(symbol: &Symbol) -> Precedence {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum SymbolType {
+    Arithmetic,
+    Relational,
+    Logical,
+    Conditional,
+    Other,
+}
+
+pub fn get_symbol_type(symbol: &Symbol) -> SymbolType {
+    match symbol {
+        Symbol::Plus | Symbol::Minus | Symbol::Asterisk | Symbol::Slash | Symbol::Percent | Symbol::Caret => SymbolType::Arithmetic,
+        Symbol::Equal | Symbol::NotEqual | Symbol::LessThan | Symbol::GreaterThan | Symbol::LessEqual | Symbol::GreaterEqual => SymbolType::Relational,
+        Symbol::LogicAdd | Symbol::LogicOr | Symbol::LogicNot => SymbolType::Logical,
+        Symbol::Conditional | Symbol::ConditionalElse => SymbolType::Conditional,
+        _ =>  SymbolType::Other,
+    }
+}
+
 
 impl fmt::Display for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
