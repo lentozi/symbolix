@@ -94,7 +94,7 @@ fn test_symbol_precedence() {
 fn test_conditional_parsing() {
     let input = "x > 100 ? x * (2 + 3) : x / 2";
     let expected_expression = Expression::ternary(
-        Expression::binary(
+        Expression::relation(
             Expression::variable(Variable::new("x")),
             Symbol::GreaterThan,
             Expression::constant(Constant::number(Number::integer(100))),
@@ -127,14 +127,14 @@ fn test_conditional_parsing() {
 fn test_nested_conditional_parsing() {
     let input = "a > b ? c < d ? e : f : g";
     let expected_expression = Expression::ternary(
-        Expression::binary(
+        Expression::relation(
             Expression::variable(Variable::new("a")),
             Symbol::GreaterThan,
             Expression::variable(Variable::new("b")),
         ),
         Symbol::Conditional,
         Expression::ternary(
-            Expression::binary(
+            Expression::relation(
                 Expression::variable(Variable::new("c")),
                 Symbol::LessThan,
                 Expression::variable(Variable::new("d")),
