@@ -1,14 +1,13 @@
 use std::fmt;
 use crate::lexer::constant::Constant;
 use crate::lexer::symbol::Symbol;
-use crate::lexer::variable::Variable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     // 常量表达式
     Constant(Constant),
     // 变量表达式
-    Variable(Variable),
+    Variable(String),
     // 一元表达式
     UnaryExpression(Symbol, Box<Expression>),
     // 二元表达式
@@ -24,7 +23,7 @@ impl Expression {
         Expression::Constant(constant)
     }
 
-    pub fn variable(variable: Variable) -> Expression {
+    pub fn variable(variable: String) -> Expression {
         Expression::Variable(variable)
     }
 

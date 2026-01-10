@@ -1,6 +1,6 @@
 use crate::lexer::constant::Number;
 use crate::lexer::symbol::{Relation, Symbol};
-use crate::lexer::variable::Variable;
+use crate::semantic::variable::Variable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticExpression {

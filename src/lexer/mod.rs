@@ -12,12 +12,10 @@ use nom::bytes::tag;
 use nom::character::char;
 use nom::character::complete::digit0;
 use nom::combinator::{map, map_res, recognize};
-use crate::lexer::variable::Variable;
 
 pub mod constant;
 pub mod symbol;
 pub mod token;
-pub mod variable;
 
 fn parse_integer(input: &str) -> IResult<&str, i64> {
     i64(input)
@@ -66,7 +64,7 @@ fn parse_symbol(input: &str) -> IResult<&str, Symbol> {
     )).parse(input)
 }
 
-fn parse_variable(input: &str) -> IResult<&str, Variable> {
+fn parse_variable(input: &str) -> IResult<&str, String> {
     let first_char = nom::character::complete::satisfy(|c| c.is_alphabetic() || c == '_');
     let rest_chars = take_while(|c: char| c.is_alphanumeric() || c == '_');
 
@@ -74,7 +72,7 @@ fn parse_variable(input: &str) -> IResult<&str, Variable> {
         nom::sequence::pair(first_char, rest_chars)
     );
 
-    map(var_parser, |s: &str| Variable::new(s)).parse(input)
+    map(var_parser, |s: &str| s.to_string()).parse(input)
 }
 
 /// Parse a single token from the start of `input`, skipping leading whitespace.

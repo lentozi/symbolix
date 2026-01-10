@@ -1,10 +1,12 @@
 mod semantic_expression;
+mod variable;
 
 use crate::lexer::constant::{Constant, Number};
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
 use crate::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
+use crate::semantic::variable::Variable;
 
 fn push_left(stack: &mut Vec<Expression>, root: Expression) {
     let mut visiting = Some(root);
@@ -150,9 +152,9 @@ pub fn ast_to_semantic(expr: &Expression) -> SemanticExpression {
 pub fn visit_leaf_node(stack: &mut Vec<SemanticExpression>, node: Expression) {
     match node {
         Expression::Variable(ref v) => {
-            let v = (*v).clone();
+            let variable = Variable::new(v);
             // TODO 变量的类型是如何判断的
-            stack.push(SemanticExpression::Numeric(NumericExpression::variable(v)));
+            stack.push(SemanticExpression::Numeric(NumericExpression::variable(variable)));
         }
         Expression::Constant(Constant::Number(ref n)) => {
             let n = (*n).clone();

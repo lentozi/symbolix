@@ -2,7 +2,6 @@ use symbolix::lexer::Lexer;
 use symbolix::lexer::constant::{Constant, Number};
 use symbolix::lexer::symbol::{Binary, Other, Relation, Symbol, Ternary, Unary};
 use symbolix::lexer::token::Token;
-use symbolix::lexer::variable::Variable;
 
 #[test]
 fn test_parsing() {
@@ -33,14 +32,14 @@ fn test_ternary_expression() {
     let input = "x > 0 ? x : -x";
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
-        Token::Variable(Variable::new("x")),
+        Token::Variable("x".parse().unwrap()),
         Token::Symbol(Symbol::Relation(Relation::GreaterThan)),
         Token::Constant(Constant::Number(Number::Integer(0))),
         Token::Symbol(Symbol::Ternary(Ternary::Conditional)),
-        Token::Variable(Variable::new("x")),
+        Token::Variable("x".parse().unwrap()),
         Token::Symbol(Symbol::Ternary(Ternary::ConditionalElse)),
         Token::Symbol(Symbol::Binary(Binary::Subtract)),
-        Token::Variable(Variable::new("x")),
+        Token::Variable("x".parse().unwrap()),
     ];
 
     for expected in expected_tokens {
@@ -56,12 +55,12 @@ fn test_logical_expression() {
     let input = "a && true || !c";
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
-        Token::Variable(Variable::new("a")),
+        Token::Variable("a".parse().unwrap()),
         Token::Symbol(Symbol::Binary(Binary::LogicAnd)),
         Token::Constant(Constant::boolean(true)),
         Token::Symbol(Symbol::Binary(Binary::LogicOr)),
         Token::Symbol(Symbol::Unary(Unary::LogicNot)),
-        Token::Variable(Variable::new("c")),
+        Token::Variable("c".parse().unwrap()),
     ];
 
     for expected in expected_tokens {
@@ -77,11 +76,11 @@ fn test_variable_parsing() {
     let input = "var_name123 + anotherVar - _tempVar";
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
-        Token::Variable(Variable::new("var_name123")),
+        Token::Variable("var_name123".parse().unwrap()),
         Token::Symbol(Symbol::Binary(Binary::Add)),
-        Token::Variable(Variable::new("anotherVar")),
+        Token::Variable("anotherVar".parse().unwrap()),
         Token::Symbol(Symbol::Binary(Binary::Subtract)),
-        Token::Variable(Variable::new("_tempVar")),
+        Token::Variable("_tempVar".parse().unwrap()),
     ];
 
     for expected in expected_tokens {

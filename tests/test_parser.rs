@@ -2,18 +2,17 @@ use symbolix::parser::expression::Expression;
 use symbolix::lexer::constant::{Constant, Number};
 use symbolix::lexer::Lexer;
 use symbolix::lexer::symbol::{Binary, Relation, Symbol, Ternary, Unary};
-use symbolix::lexer::variable::Variable;
 
 #[test]
 fn test_unary_parsing() {
     let input = "-x + y - !z";
     let expected_expression = Expression::binary(
-        Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable(Variable::new("x"))),
+        Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable("x".parse().unwrap())),
         Symbol::Binary(Binary::Add),
         Expression::binary(
-            Expression::variable(Variable::new("y")),
+            Expression::variable("y".parse().unwrap()),
             Symbol::Binary(Binary::Subtract),
-            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable(Variable::new("z"))),
+            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable("z".parse().unwrap())),
         ),
     );
 
@@ -29,12 +28,12 @@ fn test_double_unary_parsing() {
     let expected_expression = Expression::binary(
         Expression::unary(
             Symbol::Unary(Unary::LogicNot),
-            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable(Variable::new("a"))),
+            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable("a".parse().unwrap())),
         ),
         Symbol::Binary(Binary::Add),
         Expression::unary(
             Symbol::Unary(Unary::Minus),
-            Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable(Variable::new("b"))),
+            Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable("b".parse().unwrap())),
         ),
     );
 
@@ -49,9 +48,9 @@ fn test_logic_parsing() {
     let input = "!a && b || true";
     let expected_expression = Expression::binary(
         Expression::binary(
-            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable(Variable::new("a"))),
+            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable("a".parse().unwrap())),
             Symbol::Binary(Binary::LogicAnd),
-            Expression::variable(Variable::new("b")),
+            Expression::variable("b".parse().unwrap()),
         ),
         Symbol::Binary(Binary::LogicOr),
         Expression::constant(Constant::boolean(true)),
@@ -67,19 +66,19 @@ fn test_logic_parsing() {
 fn test_symbol_precedence() {
     let input = "a + b * c - d / e";
     let expected_expression = Expression::binary(
-        Expression::variable(Variable::new("a")),
+        Expression::variable("a".parse().unwrap()),
         Symbol::Binary(Binary::Add),
         Expression::binary(
             Expression::binary(
-                Expression::variable(Variable::new("b")),
+                Expression::variable("b".parse().unwrap()),
                 Symbol::Binary(Binary::Multiply),
-                Expression::variable(Variable::new("c")),
+                Expression::variable("c".parse().unwrap()),
             ),
             Symbol::Binary(Binary::Subtract),
             Expression::binary(
-                Expression::variable(Variable::new("d")),
+                Expression::variable("d".parse().unwrap()),
                 Symbol::Binary(Binary::Divide),
-                Expression::variable(Variable::new("e")),
+                Expression::variable("e".parse().unwrap()),
             ),
         )
     );
@@ -95,13 +94,13 @@ fn test_conditional_parsing() {
     let input = "x > 100 ? x * (2 + 3) : x / 2";
     let expected_expression = Expression::ternary(
         Expression::relation(
-            Expression::variable(Variable::new("x")),
+            Expression::variable("x".parse().unwrap()),
             Symbol::Relation(Relation::GreaterThan),
             Expression::constant(Constant::number(Number::integer(100))),
         ),
         Symbol::Ternary(Ternary::Conditional),
         Expression::binary(
-            Expression::variable(Variable::new("x")),
+            Expression::variable("x".parse().unwrap()),
             Symbol::Binary(Binary::Multiply),
             Expression::binary(
                 Expression::constant(Constant::number(Number::integer(2))),
@@ -111,7 +110,7 @@ fn test_conditional_parsing() {
         ),
         Symbol::Ternary(Ternary::ConditionalElse),
         Expression::binary(
-            Expression::variable(Variable::new("x")),
+            Expression::variable("x".parse().unwrap()),
             Symbol::Binary(Binary::Divide),
             Expression::constant(Constant::number(Number::integer(2))),
         ),
@@ -128,24 +127,24 @@ fn test_nested_conditional_parsing() {
     let input = "a > b ? c < d ? e : f : g";
     let expected_expression = Expression::ternary(
         Expression::relation(
-            Expression::variable(Variable::new("a")),
+            Expression::variable("a".parse().unwrap()),
             Symbol::Relation(Relation::GreaterThan),
-            Expression::variable(Variable::new("b")),
+            Expression::variable("b".parse().unwrap()),
         ),
         Symbol::Ternary(Ternary::Conditional),
         Expression::ternary(
             Expression::relation(
-                Expression::variable(Variable::new("c")),
+                Expression::variable("c".parse().unwrap()),
                 Symbol::Relation(Relation::LessThan),
-                Expression::variable(Variable::new("d")),
+                Expression::variable("d".parse().unwrap()),
             ),
             Symbol::Ternary(Ternary::Conditional),
-            Expression::variable(Variable::new("e")),
+            Expression::variable("e".parse().unwrap()),
             Symbol::Ternary(Ternary::ConditionalElse),
-            Expression::variable(Variable::new("f")),
+            Expression::variable("f".parse().unwrap()),
         ),
         Symbol::Ternary(Ternary::ConditionalElse),
-        Expression::variable(Variable::new("g")),
+        Expression::variable("g".parse().unwrap()),
     );
 
     let mut lexer = Lexer::new(input);
