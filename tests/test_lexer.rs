@@ -1,6 +1,6 @@
 use symbolix::lexer::Lexer;
 use symbolix::lexer::constant::{Constant, Number};
-use symbolix::lexer::symbol::Symbol;
+use symbolix::lexer::symbol::{Binary, Other, Relation, Symbol, Ternary, Unary};
 use symbolix::lexer::token::Token;
 use symbolix::lexer::variable::Variable;
 
@@ -10,14 +10,14 @@ fn test_parsing() {
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
         Token::Constant(Constant::Number(Number::Integer(123))),
-        Token::Symbol(Symbol::Plus),
+        Token::Symbol(Symbol::Binary(Binary::Add)),
         Token::Constant(Constant::Number(Number::Float(45.67))),
-        Token::Symbol(Symbol::Asterisk),
-        Token::Symbol(Symbol::LeftParen),
+        Token::Symbol(Symbol::Binary(Binary::Multiply)),
+        Token::Symbol(Symbol::Other(Other::LeftParen)),
         Token::Constant(Constant::Number(Number::Integer(89))),
-        Token::Symbol(Symbol::Minus),
+        Token::Symbol(Symbol::Binary(Binary::Subtract)),
         Token::Constant(Constant::Number(Number::Float(0.1))),
-        Token::Symbol(Symbol::RightParen),
+        Token::Symbol(Symbol::Other(Other::RightParen)),
     ];
 
     for expected in expected_tokens {
@@ -34,12 +34,12 @@ fn test_ternary_expression() {
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
         Token::Variable(Variable::new("x")),
-        Token::Symbol(Symbol::GreaterThan),
+        Token::Symbol(Symbol::Relation(Relation::GreaterThan)),
         Token::Constant(Constant::Number(Number::Integer(0))),
-        Token::Symbol(Symbol::Conditional),
+        Token::Symbol(Symbol::Ternary(Ternary::Conditional)),
         Token::Variable(Variable::new("x")),
-        Token::Symbol(Symbol::ConditionalElse),
-        Token::Symbol(Symbol::Minus),
+        Token::Symbol(Symbol::Ternary(Ternary::ConditionalElse)),
+        Token::Symbol(Symbol::Binary(Binary::Subtract)),
         Token::Variable(Variable::new("x")),
     ];
 
@@ -57,10 +57,10 @@ fn test_logical_expression() {
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
         Token::Variable(Variable::new("a")),
-        Token::Symbol(Symbol::LogicAdd),
+        Token::Symbol(Symbol::Binary(Binary::LogicAnd)),
         Token::Constant(Constant::boolean(true)),
-        Token::Symbol(Symbol::LogicOr),
-        Token::Symbol(Symbol::LogicNot),
+        Token::Symbol(Symbol::Binary(Binary::LogicOr)),
+        Token::Symbol(Symbol::Unary(Unary::LogicNot)),
         Token::Variable(Variable::new("c")),
     ];
 
@@ -78,9 +78,9 @@ fn test_variable_parsing() {
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
         Token::Variable(Variable::new("var_name123")),
-        Token::Symbol(Symbol::Plus),
+        Token::Symbol(Symbol::Binary(Binary::Add)),
         Token::Variable(Variable::new("anotherVar")),
-        Token::Symbol(Symbol::Minus),
+        Token::Symbol(Symbol::Binary(Binary::Subtract)),
         Token::Variable(Variable::new("_tempVar")),
     ];
 
@@ -98,9 +98,9 @@ fn test_boolean_parsing() {
     let mut lexer = Lexer::new(input);
     let expected_tokens = vec![
         Token::Constant(Constant::Boolean(true)),
-        Token::Symbol(Symbol::LogicAdd),
+        Token::Symbol(Symbol::Binary(Binary::LogicAnd)),
         Token::Constant(Constant::Boolean(false)),
-        Token::Symbol(Symbol::LogicOr),
+        Token::Symbol(Symbol::Binary(Binary::LogicOr)),
         Token::Constant(Constant::Boolean(true)),
     ];
 

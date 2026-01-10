@@ -1,19 +1,19 @@
 use symbolix::parser::expression::Expression;
 use symbolix::lexer::constant::{Constant, Number};
 use symbolix::lexer::Lexer;
-use symbolix::lexer::symbol::Symbol;
+use symbolix::lexer::symbol::{Binary, Relation, Symbol, Ternary, Unary};
 use symbolix::lexer::variable::Variable;
 
 #[test]
 fn test_unary_parsing() {
     let input = "-x + y - !z";
     let expected_expression = Expression::binary(
-        Expression::unary(Symbol::Minus, Expression::variable(Variable::new("x"))),
-        Symbol::Plus,
+        Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable(Variable::new("x"))),
+        Symbol::Binary(Binary::Add),
         Expression::binary(
             Expression::variable(Variable::new("y")),
-            Symbol::Minus,
-            Expression::unary(Symbol::LogicNot, Expression::variable(Variable::new("z"))),
+            Symbol::Binary(Binary::Subtract),
+            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable(Variable::new("z"))),
         ),
     );
 
@@ -28,13 +28,13 @@ fn test_double_unary_parsing() {
     let input = "!!a + --b";
     let expected_expression = Expression::binary(
         Expression::unary(
-            Symbol::LogicNot,
-            Expression::unary(Symbol::LogicNot, Expression::variable(Variable::new("a"))),
+            Symbol::Unary(Unary::LogicNot),
+            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable(Variable::new("a"))),
         ),
-        Symbol::Plus,
+        Symbol::Binary(Binary::Add),
         Expression::unary(
-            Symbol::Minus,
-            Expression::unary(Symbol::Minus, Expression::variable(Variable::new("b"))),
+            Symbol::Unary(Unary::Minus),
+            Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable(Variable::new("b"))),
         ),
     );
 
@@ -49,11 +49,11 @@ fn test_logic_parsing() {
     let input = "!a && b || true";
     let expected_expression = Expression::binary(
         Expression::binary(
-            Expression::unary(Symbol::LogicNot, Expression::variable(Variable::new("a"))),
-            Symbol::LogicAdd,
+            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable(Variable::new("a"))),
+            Symbol::Binary(Binary::LogicAnd),
             Expression::variable(Variable::new("b")),
         ),
-        Symbol::LogicOr,
+        Symbol::Binary(Binary::LogicOr),
         Expression::constant(Constant::boolean(true)),
     );
 
@@ -68,17 +68,17 @@ fn test_symbol_precedence() {
     let input = "a + b * c - d / e";
     let expected_expression = Expression::binary(
         Expression::variable(Variable::new("a")),
-        Symbol::Plus,
+        Symbol::Binary(Binary::Add),
         Expression::binary(
             Expression::binary(
                 Expression::variable(Variable::new("b")),
-                Symbol::Asterisk,
+                Symbol::Binary(Binary::Multiply),
                 Expression::variable(Variable::new("c")),
             ),
-            Symbol::Minus,
+            Symbol::Binary(Binary::Subtract),
             Expression::binary(
                 Expression::variable(Variable::new("d")),
-                Symbol::Slash,
+                Symbol::Binary(Binary::Divide),
                 Expression::variable(Variable::new("e")),
             ),
         )
@@ -96,23 +96,23 @@ fn test_conditional_parsing() {
     let expected_expression = Expression::ternary(
         Expression::relation(
             Expression::variable(Variable::new("x")),
-            Symbol::GreaterThan,
+            Symbol::Relation(Relation::GreaterThan),
             Expression::constant(Constant::number(Number::integer(100))),
         ),
-        Symbol::Conditional,
+        Symbol::Ternary(Ternary::Conditional),
         Expression::binary(
             Expression::variable(Variable::new("x")),
-            Symbol::Asterisk,
+            Symbol::Binary(Binary::Multiply),
             Expression::binary(
                 Expression::constant(Constant::number(Number::integer(2))),
-                Symbol::Plus,
+                Symbol::Binary(Binary::Add),
                 Expression::constant(Constant::number(Number::integer(3))),
             ),
         ),
-        Symbol::ConditionalElse,
+        Symbol::Ternary(Ternary::ConditionalElse),
         Expression::binary(
             Expression::variable(Variable::new("x")),
-            Symbol::Slash,
+            Symbol::Binary(Binary::Divide),
             Expression::constant(Constant::number(Number::integer(2))),
         ),
     );
@@ -129,22 +129,22 @@ fn test_nested_conditional_parsing() {
     let expected_expression = Expression::ternary(
         Expression::relation(
             Expression::variable(Variable::new("a")),
-            Symbol::GreaterThan,
+            Symbol::Relation(Relation::GreaterThan),
             Expression::variable(Variable::new("b")),
         ),
-        Symbol::Conditional,
+        Symbol::Ternary(Ternary::Conditional),
         Expression::ternary(
             Expression::relation(
                 Expression::variable(Variable::new("c")),
-                Symbol::LessThan,
+                Symbol::Relation(Relation::LessThan),
                 Expression::variable(Variable::new("d")),
             ),
-            Symbol::Conditional,
+            Symbol::Ternary(Ternary::Conditional),
             Expression::variable(Variable::new("e")),
-            Symbol::ConditionalElse,
+            Symbol::Ternary(Ternary::ConditionalElse),
             Expression::variable(Variable::new("f")),
         ),
-        Symbol::ConditionalElse,
+        Symbol::Ternary(Ternary::ConditionalElse),
         Expression::variable(Variable::new("g")),
     );
 

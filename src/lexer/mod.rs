@@ -1,3 +1,4 @@
+use crate::lexer::symbol::{Binary, Other, Relation, Ternary, Unary};
 use std::str::FromStr;
 use nom::character::complete::{digit1, i64, multispace0};
 use nom::{IResult, Parser};
@@ -41,27 +42,27 @@ fn parse_boolean(input: &str) -> IResult<&str, bool> {
 
 fn parse_symbol(input: &str) -> IResult<&str, Symbol> {
     alt((
-            map(tag("+"), |_| Symbol::Plus),
-            map(tag("-"), |_| Symbol::Minus),
-            map(tag("*"), |_| Symbol::Asterisk),
-            map(tag("/"), |_| Symbol::Slash),
-            map(tag("%"), |_| Symbol::Percent),
-            map(tag("^"), |_| Symbol::Caret),
-            map(tag("=="), |_| Symbol::Equal),
-            map(tag("!="), |_| Symbol::NotEqual),
-            map(tag("<="), |_| Symbol::LessEqual),
-            map(tag(">="), |_| Symbol::GreaterEqual),
-            map(tag("<"), |_| Symbol::LessThan),
-            map(tag(">"), |_| Symbol::GreaterThan),
-            map(tag("("), |_| Symbol::LeftParen),
-            map(tag(")"), |_| Symbol::RightParen),
-            map(tag(","), |_| Symbol::Comma),
-            map(tag(";"), |_| Symbol::Semicolon),
-            map(tag("?"), |_| Symbol::Conditional),
-            map(tag(":"), |_| Symbol::ConditionalElse),
-            map(tag("&&"), |_| Symbol::LogicAdd),
-            map(tag("||"), |_| Symbol::LogicOr),
-            map(tag("!"), |_| Symbol::LogicNot),
+            map(tag("+"), |_| Symbol::Binary(Binary::Add)),
+            map(tag("-"), |_| Symbol::Binary(Binary::Subtract)),
+            map(tag("*"), |_| Symbol::Binary(Binary::Multiply)),
+            map(tag("/"), |_| Symbol::Binary(Binary::Divide)),
+            map(tag("%"), |_| Symbol::Binary(Binary::Modulus)),
+            map(tag("^"), |_| Symbol::Binary(Binary::Power)),
+            map(tag("=="), |_| Symbol::Relation(Relation::Equal)),
+            map(tag("!="), |_| Symbol::Relation(Relation::NotEqual)),
+            map(tag("<="), |_| Symbol::Relation(Relation::LessEqual)),
+            map(tag(">="), |_| Symbol::Relation(Relation::GreaterEqual)),
+            map(tag("<"), |_| Symbol::Relation(Relation::LessThan)),
+            map(tag(">"), |_| Symbol::Relation(Relation::GreaterThan)),
+            map(tag("("), |_| Symbol::Other(Other::LeftParen)),
+            map(tag(")"), |_| Symbol::Other(Other::RightParen)),
+            map(tag(","), |_| Symbol::Other(Other::Comma)),
+            map(tag(";"), |_| Symbol::Other(Other::Semicolon)),
+            map(tag("?"), |_| Symbol::Ternary(Ternary::Conditional)),
+            map(tag(":"), |_| Symbol::Ternary(Ternary::ConditionalElse)),
+            map(tag("&&"), |_| Symbol::Binary(Binary::LogicAnd)),
+            map(tag("||"), |_| Symbol::Binary(Binary::LogicOr)),
+            map(tag("!"), |_| Symbol::Unary(Unary::LogicNot)),
     )).parse(input)
 }
 
