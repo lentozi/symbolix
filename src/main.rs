@@ -6,6 +6,7 @@ use crate::semantic::ast_to_semantic;
 mod lexer;
 mod parser;
 mod semantic;
+mod error;
 
 fn main() {
     // let input = "-x + 123 + 45.67 * (89 - 0.1) ^ x";
