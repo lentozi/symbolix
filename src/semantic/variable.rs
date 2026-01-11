@@ -2,7 +2,6 @@ use std::fmt;
 use log::warn;
 use crate::lexer::constant::Constant;
 use crate::semantic::SYMBOL_TABLE;
-use crate::semantic::variable::VariableType::Unknown;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VariableType {

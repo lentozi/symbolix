@@ -1,5 +1,5 @@
-mod semantic_expression;
-mod variable;
+pub mod semantic_expression;
+pub mod variable;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -9,16 +9,23 @@ use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
 use crate::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
-use crate::semantic::variable::Variable;
+use crate::semantic::variable::{Variable, VariableType};
 
 pub static SYMBOL_TABLE: Lazy<Mutex<HashMap<String, Variable>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+// 清空符号表
+pub fn clear_symbol_table() {
+    let mut table = SYMBOL_TABLE.lock().unwrap();
+    table.clear();
+}
 
 fn push_left(stack: &mut Vec<Expression>, root: Expression) {
     let mut visiting = Some(root);
 
     loop {
         (*stack).push(visiting.clone().unwrap());
-        if let Some(Expression::BinaryExpression(left, _, _)) = visiting {
+        if let Some(Expression::BinaryExpression(left, _, _) |
+                    Expression::Relation(left, _, _)) = visiting {
             visiting = Some(*left);
             continue;
         }
@@ -159,19 +166,32 @@ pub fn visit_leaf_node(stack: &mut Vec<SemanticExpression>, node: Expression) {
     match node {
         Expression::Variable(ref v) => {
             // 变量必须显式声明类型
-            stack.push(SemanticExpression::Numeric(NumericExpression::variable(match Variable::find(v) {
+            let var = match Variable::find(v) {
                 Some(var) => var,
                 None => {
                     panic!("undefined variable: {}", v);
                 }
-            })));
+            };
+            match var.var_type {
+                VariableType::Boolean => {
+                    stack.push(SemanticExpression::Logical(LogicalExpression::variable(var)));
+                }
+                VariableType::Integer | VariableType::Float | VariableType::Fraction => {
+                    stack.push(SemanticExpression::Numeric(NumericExpression::variable(var)));
+                },
+                VariableType::Unknown => unreachable!(),
+            }
         }
         Expression::Constant(Constant::Number(ref n)) => {
             let n = (*n).clone();
             stack.push(SemanticExpression::Numeric(NumericExpression::constant(n)))
         }
+         Expression::Constant(Constant::Boolean(ref b)) => {
+             let b = (*b).clone();
+             stack.push(SemanticExpression::Logical(LogicalExpression::constant(b)))
+         }
         Expression::TernaryExpression(cond, symbol1, then, symbol2, otherwise) => {
-            if symbol1 == Symbol::Ternary(Ternary::Conditional) && symbol2 == Symbol::Ternary(Ternary::Conditional) {
+            if symbol1 == Symbol::Ternary(Ternary::Conditional) && symbol2 == Symbol::Ternary(Ternary::ConditionalElse) {
                 let otherwise_semantic = ast_to_semantic(otherwise.as_ref());
                 let then_semantic = ast_to_semantic(then.as_ref());
                 let cond_semantic = ast_to_semantic(cond.as_ref());
@@ -206,6 +226,7 @@ pub fn visit_leaf_node(stack: &mut Vec<SemanticExpression>, node: Expression) {
                     }
                 }
                 Symbol::Unary(Unary::LogicNot) => {
+                    println!("{:?}", expr_semantic);
                     match expr_semantic {
                         SemanticExpression::Logical(l) =>
                             stack.push(SemanticExpression::Logical(LogicalExpression::not(l))),

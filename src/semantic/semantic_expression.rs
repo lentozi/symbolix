@@ -13,6 +13,7 @@ pub enum NumericExpression {
     Constant(Number),
     Variable(Variable),
     Negation(Box<NumericExpression>),
+    // TODO 基于桶排序构造数据结构替代 Vec
     Addition(Vec<NumericExpression>),
     Multiplication(Vec<NumericExpression>), // a/b = a * b^(-1)
     Power {
@@ -60,9 +61,7 @@ impl NumericExpression {
                 NumericExpression::Addition(negated_terms)
             }
             NumericExpression::Multiplication(v) => {
-                let mut new_terms = v;
-                new_terms.push(NumericExpression::Constant(Number::integer(-1)));
-                NumericExpression::Multiplication(new_terms)
+                NumericExpression::multiplication(NumericExpression::Multiplication(v), NumericExpression::Constant(Number::integer(-1)))
             }
             NumericExpression::Power { .. } => NumericExpression::Negation(Box::new(expr)),
             NumericExpression::Piecewise { cases, otherwise } => {
@@ -81,21 +80,8 @@ impl NumericExpression {
 
     pub fn addition(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
         match (term1, term2) {
-            // 常量折叠
-            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
-                NumericExpression::constant(c1 + c2)
-            }
-
-            // 常量放左侧（这里不需要 clone）
-            (l, NumericExpression::Constant(c2)) => {
-                NumericExpression::Addition(vec![l, NumericExpression::Constant(c2)])
-            }
-
-            // Piecewise + Piecewise
-            (
-                NumericExpression::Piecewise { cases: cases1, otherwise: otherwise1 },
-                NumericExpression::Piecewise { cases: cases2, otherwise: otherwise2 },
-            ) => {
+            (NumericExpression::Piecewise { cases: cases1, otherwise: otherwise1 },
+                NumericExpression::Piecewise { cases: cases2, otherwise: otherwise2 }) => {
                 let mut new_cases = Vec::new();
 
                 // 先算 otherwise × otherwise
@@ -140,8 +126,6 @@ impl NumericExpression {
                     otherwise: new_otherwise,
                 }
             }
-
-            // Piecewise + 普通表达式
             (NumericExpression::Piecewise { cases, otherwise }, r) => {
                 let new_cases = cases
                     .into_iter()
@@ -156,8 +140,6 @@ impl NumericExpression {
                     otherwise: new_otherwise,
                 }
             }
-
-            // 普通表达式 + Piecewise
             (l, NumericExpression::Piecewise { cases, otherwise }) => {
                 let new_cases = cases
                     .into_iter()
@@ -172,28 +154,31 @@ impl NumericExpression {
                     otherwise: new_otherwise,
                 }
             }
-
-            // Addition + Addition
             (NumericExpression::Addition(mut v1), NumericExpression::Addition(v2)) => {
                 v1.extend(v2);
                 NumericExpression::Addition(v1)
             }
-
-            // Addition + r
+            (NumericExpression::Addition(v), NumericExpression::Constant(n)) => {
+                let mut combined = vec![NumericExpression::Constant(n)];
+                combined.extend(v);
+                NumericExpression::Addition(combined)
+            }
+            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {     // 常量折叠
+                NumericExpression::constant(c1 + c2)
+            }
+            (l, NumericExpression::Constant(c2)) => {                       // 常量放左侧
+                NumericExpression::Addition(vec![NumericExpression::Constant(c2), l])
+            }
             (NumericExpression::Addition(mut v), r) => {
                 v.push(r);
                 NumericExpression::Addition(v)
             }
-
-            // l + Addition
             (l, NumericExpression::Addition(v)) => {
                 let mut combined = Vec::with_capacity(v.len() + 1);
                 combined.push(l);
                 combined.extend(v);
                 NumericExpression::Addition(combined)
             }
-
-            // fallback
             (l, r) => NumericExpression::Addition(vec![l, r]),
         }
     }
@@ -201,16 +186,8 @@ impl NumericExpression {
 
     pub fn multiplication(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
         match (term1, term2) {
-            // 常量折叠
-            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
-                NumericExpression::Constant(c1 * c2)
-            }
-
-            // Piecewise × Piecewise
-            (
-                NumericExpression::Piecewise { cases: cases1, otherwise: otherwise1 },
-                NumericExpression::Piecewise { cases: cases2, otherwise: otherwise2 },
-            ) => {
+            (NumericExpression::Piecewise { cases: cases1, otherwise: otherwise1 },
+                NumericExpression::Piecewise { cases: cases2, otherwise: otherwise2 }) => {
                 let mut new_cases = Vec::new();
 
                 // 先计算 otherwise × otherwise（避免 moved value）
@@ -257,8 +234,6 @@ impl NumericExpression {
                     otherwise: new_otherwise,
                 }
             }
-
-            // Piecewise × 普通表达式
             (NumericExpression::Piecewise { cases, otherwise }, r) => {
                 let new_cases = cases
                     .into_iter()
@@ -275,8 +250,6 @@ impl NumericExpression {
                     otherwise: new_otherwise,
                 }
             }
-
-            // 普通表达式 × Piecewise
             (l, NumericExpression::Piecewise { cases, otherwise }) => {
                 let new_cases = cases
                     .into_iter()
@@ -293,28 +266,31 @@ impl NumericExpression {
                     otherwise: new_otherwise,
                 }
             }
-
-            // Multiplication × Multiplication
             (NumericExpression::Multiplication(mut v1), NumericExpression::Multiplication(v2)) => {
                 v1.extend(v2);
                 NumericExpression::Multiplication(v1)
             }
-
-            // Multiplication × r
+            (NumericExpression::Multiplication(v), NumericExpression::Constant(n)) => {
+                let mut combined = vec![NumericExpression::Constant(n)];
+                combined.extend(v);
+                NumericExpression::Multiplication(combined)
+            }
             (NumericExpression::Multiplication(mut v), r) => {
                 v.push(r);
                 NumericExpression::Multiplication(v)
             }
-
-            // l × Multiplication
+            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {         // 常量折叠
+                NumericExpression::Constant(c1 * c2)
+            }
+            (l, NumericExpression::Constant(c2)) => {                           // 常量放左侧
+                NumericExpression::Multiplication(vec![NumericExpression::Constant(c2), l])
+            }
             (l, NumericExpression::Multiplication(v)) => {
                 let mut combined = Vec::with_capacity(v.len() + 1);
                 combined.push(l);
                 combined.extend(v);
                 NumericExpression::Multiplication(combined)
             }
-
-            // fallback
             (l, r) => NumericExpression::Multiplication(vec![l, r]),
         }
     }
@@ -426,19 +402,18 @@ impl LogicalExpression {
             (LogicalExpression::Constant(c1), LogicalExpression::Constant(c2)) => {
                 LogicalExpression::constant(c1 && c2)
             }
-
+            (_, LogicalExpression::Constant(false)) => LogicalExpression::Constant(false),
+            (l, LogicalExpression::Constant(true)) => l,
             // And + And
             (LogicalExpression::And(mut v1), LogicalExpression::And(v2)) => {
                 v1.extend(v2);
                 LogicalExpression::And(v1)
             }
-
             // And + r
             (LogicalExpression::And(mut v), r) => {
                 v.push(r);
                 LogicalExpression::And(v)
             }
-
             // l + And
             (l, LogicalExpression::And(v)) => {
                 let mut combined = Vec::with_capacity(v.len() + 1);
@@ -446,7 +421,6 @@ impl LogicalExpression {
                 combined.extend(v);
                 LogicalExpression::And(combined)
             }
-
             // fallback
             (l, r) => LogicalExpression::And(vec![l, r]),
         }
@@ -458,19 +432,18 @@ impl LogicalExpression {
             (LogicalExpression::Constant(c1), LogicalExpression::Constant(c2)) => {
                 LogicalExpression::constant(c1 || c2)
             }
-
+            (_, LogicalExpression::Constant(true)) => LogicalExpression::Constant(true),
+            (l, LogicalExpression::Constant(false)) => l,
             // Or + Or
             (LogicalExpression::Or(mut v1), LogicalExpression::Or(v2)) => {
                 v1.extend(v2);
                 LogicalExpression::Or(v1)
             }
-
             // Or + r
             (LogicalExpression::Or(mut v), r) => {
                 v.push(r);
                 LogicalExpression::Or(v)
             }
-
             // l + Or
             (l, LogicalExpression::Or(v)) => {
                 let mut combined = Vec::with_capacity(v.len() + 1);
@@ -478,8 +451,6 @@ impl LogicalExpression {
                 combined.extend(v);
                 LogicalExpression::Or(combined)
             }
-
-            // fallback
             (l, r) => LogicalExpression::Or(vec![l, r]),
         }
     }
