@@ -342,8 +342,29 @@ impl NumericExpression {
     }
 
     pub fn piecewise(cases: Vec<(LogicalExpression, NumericExpression)>, otherwise: Option<NumericExpression>) -> NumericExpression {
+        // 处理三元表达式嵌套的情况
+        let mut flattened_cases: Vec<(LogicalExpression, NumericExpression)> = Vec::new();
+
+        for (cond, num) in cases {
+            match num {
+                NumericExpression::Piecewise { cases: inner_cases, otherwise: inner_otherwise } => {
+                    for (inner_cond, inner_num) in inner_cases {
+                        let combined_cond = LogicalExpression::and(cond.clone(), inner_cond);
+                        flattened_cases.push((combined_cond, inner_num));
+                    }
+                    if let Some(inner_o) = inner_otherwise {
+                        let combined_cond = LogicalExpression::and(cond.clone(), LogicalExpression::constant(true));
+                        flattened_cases.push((combined_cond, *inner_o));
+                    }
+                }
+                _ => {
+                    flattened_cases.push((cond, num));
+                }
+            }
+        }
+
         NumericExpression::Piecewise {
-            cases,
+            cases: flattened_cases,
             otherwise: otherwise.map(Box::new),
         }
     }

@@ -1,12 +1,17 @@
 mod semantic_expression;
 mod variable;
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
 use crate::lexer::constant::{Constant, Number};
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
 use crate::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
 use crate::semantic::variable::Variable;
+
+pub static SYMBOL_TABLE: Lazy<Mutex<HashMap<String, Variable>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn push_left(stack: &mut Vec<Expression>, root: Expression) {
     let mut visiting = Some(root);
@@ -21,6 +26,7 @@ fn push_left(stack: &mut Vec<Expression>, root: Expression) {
     }
 }
 
+// 判断表达式是否为数值表达式
 fn is_numeric(expr: &Expression) -> bool {
     match expr {
         Expression::Constant(Constant::Number(_)) | Expression::Variable(_) => true,
@@ -152,9 +158,13 @@ pub fn ast_to_semantic(expr: &Expression) -> SemanticExpression {
 pub fn visit_leaf_node(stack: &mut Vec<SemanticExpression>, node: Expression) {
     match node {
         Expression::Variable(ref v) => {
-            let variable = Variable::new(v);
-            // TODO 变量的类型是如何判断的
-            stack.push(SemanticExpression::Numeric(NumericExpression::variable(variable)));
+            // 变量必须显式声明类型
+            stack.push(SemanticExpression::Numeric(NumericExpression::variable(match Variable::find(v) {
+                Some(var) => var,
+                None => {
+                    panic!("undefined variable: {}", v);
+                }
+            })));
         }
         Expression::Constant(Constant::Number(ref n)) => {
             let n = (*n).clone();
@@ -162,12 +172,10 @@ pub fn visit_leaf_node(stack: &mut Vec<SemanticExpression>, node: Expression) {
         }
         Expression::TernaryExpression(cond, symbol1, then, symbol2, otherwise) => {
             if symbol1 == Symbol::Ternary(Ternary::Conditional) && symbol2 == Symbol::Ternary(Ternary::Conditional) {
-                // TODO 这里的迭代有无优化空间？
                 let otherwise_semantic = ast_to_semantic(otherwise.as_ref());
                 let then_semantic = ast_to_semantic(then.as_ref());
                 let cond_semantic = ast_to_semantic(cond.as_ref());
 
-                // TODO 三元表达式嵌套的处理
                 match (cond_semantic, then_semantic, otherwise_semantic) {
                     (SemanticExpression::Logical(c), SemanticExpression::Numeric(t), SemanticExpression::Numeric(o)) =>
                         stack.push(SemanticExpression::Numeric(NumericExpression::piecewise(
