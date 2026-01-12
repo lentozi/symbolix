@@ -6,7 +6,6 @@ use crate::lexer::constant::{Constant, Number};
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
-use crate::semantic::context::AnalysisContext;
 use crate::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
 use crate::semantic::variable::VariableType;
 use crate::with_context;

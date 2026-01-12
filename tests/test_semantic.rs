@@ -1,11 +1,10 @@
-use symbolix::lexer::constant::{Constant, Number};
+use symbolix::context;
+use symbolix::lexer::constant::Number;
+use symbolix::lexer::symbol::{Relation, Symbol};
 use symbolix::lexer::Lexer;
-use symbolix::lexer::symbol::{Binary, Relation, Symbol, Ternary, Unary};
-use symbolix::parser::expression::Expression;
 use symbolix::semantic::ast_to_semantic;
 use symbolix::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
 use symbolix::semantic::variable::{Variable, VariableType};
-use symbolix::context;
 
 #[test]
 fn test_unary_semantic() {
