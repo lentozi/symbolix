@@ -1,7 +1,8 @@
 use std::fmt;
 use log::warn;
+use crate::semantic::context::AnalysisContext;
 use crate::lexer::constant::Constant;
-use crate::semantic::SYMBOL_TABLE;
+use crate::with_context;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VariableType {
@@ -21,23 +22,25 @@ pub struct Variable {
 
 impl Variable {
     pub fn new(name: &str, var_type: VariableType) -> Variable {
-        let mut guard = SYMBOL_TABLE.lock().unwrap();
-        if (*guard).contains_key(name) {
-            warn!("variable '{}' already exists", name);
-            return (*guard).get(name).unwrap().clone();
-        }
-        let variable = Variable {
-            name: name.to_string(),
-            var_type,
-            value: None,
-        };
-        (*guard).insert(name.to_string(), variable.clone());
-        variable
-    }
-
-    pub fn find(name: &str) -> Option<Variable> {
-        let guard = SYMBOL_TABLE.lock().unwrap();
-        (*guard).get(name).cloned()
+        with_context!(ctx, {
+            let symbols = &mut ctx.symbols.borrow_mut();
+            match symbols.find(name) {
+                Some(res) => {
+                    warn!("variable '{}' already exists in the current context", name);
+                    res
+                }
+                None => {
+                    // Variable does not exist in the current context, proceed to create a new one
+                    let variable = Variable {
+                        name: name.to_string(),
+                        var_type: var_type.clone(),
+                        value: None,
+                    };
+                    symbols.insert(variable.clone());
+                    variable
+                }
+            }
+        })
     }
 }
 

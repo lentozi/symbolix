@@ -1,23 +1,15 @@
 pub mod semantic_expression;
 pub mod variable;
+pub mod context;
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
 use crate::lexer::constant::{Constant, Number};
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
+use crate::semantic::context::AnalysisContext;
 use crate::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
-use crate::semantic::variable::{Variable, VariableType};
-
-pub static SYMBOL_TABLE: Lazy<Mutex<HashMap<String, Variable>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-// 清空符号表
-pub fn clear_symbol_table() {
-    let mut table = SYMBOL_TABLE.lock().unwrap();
-    table.clear();
-}
+use crate::semantic::variable::VariableType;
+use crate::with_context;
 
 fn push_left(stack: &mut Vec<Expression>, root: Expression) {
     let mut visiting = Some(root);
@@ -166,12 +158,13 @@ pub fn visit_leaf_node(stack: &mut Vec<SemanticExpression>, node: Expression) {
     match node {
         Expression::Variable(ref v) => {
             // 变量必须显式声明类型
-            let var = match Variable::find(v) {
-                Some(var) => var,
-                None => {
-                    panic!("undefined variable: {}", v);
+
+            let var = with_context!(ctx, {
+                match ctx.symbols.borrow_mut().find(v.as_str()) {
+                    Some(var) => var,
+                    None => panic!("variable '{}' not declared", v),
                 }
-            };
+            });
             match var.var_type {
                 VariableType::Boolean => {
                     stack.push(SemanticExpression::Logical(LogicalExpression::variable(var)));
