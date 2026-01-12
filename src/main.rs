@@ -1,8 +1,8 @@
-use crate::parser::expression::Expression;
-use crate::lexer::Lexer;
 use crate::lexer::symbol::Precedence;
+use crate::lexer::Lexer;
+use crate::parser::expression::Expression;
 use crate::semantic::ast_to_semantic;
-use crate::semantic::variable::{Variable, VariableType};
+use crate::semantic::variable::VariableType;
 
 mod lexer;
 mod parser;
@@ -12,11 +12,11 @@ mod macros;
 
 fn main() {
     context! {
-        let _a = Variable::new("a", VariableType::Integer);
-        let _b = Variable::new("b", VariableType::Integer);
-        let _c = Variable::new("c", VariableType::Integer);
-        let _d = Variable::new("d", VariableType::Integer);
-        let _e = Variable::new("e", VariableType::Integer);
+        let _a = var!("a", VariableType::Integer, None);
+        let _b = var!("b", VariableType::Integer, None);
+        let _c = var!("c", VariableType::Integer, None);
+        let _d = var!("d", VariableType::Integer, None);
+        let _e = var!("e", VariableType::Integer, None);
 
         // let input = "-x + 123 + 45.67 * (89 - 0.1) ^ x";
         // let input = "(x > 100 ? x * (2 + 3) : x) / 2";

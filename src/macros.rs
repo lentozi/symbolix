@@ -20,3 +20,10 @@ macro_rules! with_context {
         }
     }};
 }
+
+#[macro_export]
+macro_rules! var {
+    ($name:expr, $var_type:expr, $init_val:expr) => {
+        $crate::semantic::variable::Variable::new($name, $var_type, $init_val)
+    };
+}

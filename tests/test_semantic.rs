@@ -1,16 +1,16 @@
-use symbolix::context;
 use symbolix::lexer::constant::Number;
 use symbolix::lexer::symbol::{Relation, Symbol};
 use symbolix::lexer::Lexer;
 use symbolix::semantic::ast_to_semantic;
 use symbolix::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
-use symbolix::semantic::variable::{Variable, VariableType};
+use symbolix::semantic::variable::VariableType;
+use symbolix::{context, var};
 
 #[test]
 fn test_unary_semantic() {
     context! {
-        let x = Variable::new("x", VariableType::Integer);
-        let y = Variable::new("y", VariableType::Integer);
+        let x = var!("x", VariableType::Integer, None);
+        let y = var!("y", VariableType::Integer, None);
         let input = "-x + y";
         let expected_expression = SemanticExpression::Numeric(
             NumericExpression::Addition(vec![
@@ -30,8 +30,8 @@ fn test_unary_semantic() {
 #[test]
 fn test_logic_semantic() {
     context! {
-        let _a = Variable::new("a_bool", VariableType::Boolean);
-        let _b = Variable::new("b_bool", VariableType::Boolean);
+        let _a = var!("a_bool", VariableType::Boolean, None);
+        let _b = var!("b_bool", VariableType::Boolean, None);
         let input = "!a_bool && b_bool || true";
         let expected_expression = SemanticExpression::Logical(LogicalExpression::Constant(true));
 
@@ -45,11 +45,11 @@ fn test_logic_semantic() {
 #[test]
 fn test_common_semantic() {
     context! {
-        let a = Variable::new("a", VariableType::Integer);
-        let b = Variable::new("b", VariableType::Integer);
-        let c = Variable::new("c", VariableType::Integer);
-        let d = Variable::new("d", VariableType::Integer);
-        let e = Variable::new("e", VariableType::Integer);
+        let a = var!("a", VariableType::Integer, None);
+        let b = var!("b", VariableType::Integer, None);
+        let c = var!("c", VariableType::Integer, None);
+        let d = var!("d", VariableType::Integer, None);
+        let e = var!("e", VariableType::Integer, None);
 
         let input = "a + b * c - d / e";
         let expected_expression = SemanticExpression::Numeric(
@@ -80,7 +80,7 @@ fn test_common_semantic() {
 #[test]
 fn test_conditional_parsing() {
     context! {
-        let x = Variable::new("x", VariableType::Integer);
+        let x = var!("x", VariableType::Integer, None);
         let input = "x > 100 ? x * (2 + 3) : x / 2";
         let expected_expression = SemanticExpression::Numeric(
             NumericExpression::Piecewise {
@@ -115,13 +115,13 @@ fn test_conditional_parsing() {
 #[test]
 fn test_nested_conditional_parsing() {
     context! {
-        let a = Variable::new("a", VariableType::Integer);
-        let b = Variable::new("b", VariableType::Integer);
-        let c = Variable::new("c", VariableType::Integer);
-        let d = Variable::new("d", VariableType::Integer);
-        let e = Variable::new("e", VariableType::Integer);
-        let f = Variable::new("f", VariableType::Integer);
-        let g = Variable::new("g", VariableType::Integer);
+        let a = var!("a", VariableType::Integer, None);
+        let b = var!("b", VariableType::Integer, None);
+        let c = var!("c", VariableType::Integer, None);
+        let d = var!("d", VariableType::Integer, None);
+        let e = var!("e", VariableType::Integer, None);
+        let f = var!("f", VariableType::Integer, None);
+        let g = var!("g", VariableType::Integer, None);
 
         let input = "a > b ? c < d ? e : f : g";
         let expected_expression = SemanticExpression::Numeric(

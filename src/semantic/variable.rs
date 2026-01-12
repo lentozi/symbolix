@@ -20,7 +20,7 @@ pub struct Variable {
 }
 
 impl Variable {
-    pub fn new(name: &str, var_type: VariableType) -> Variable {
+    pub fn new(name: &str, var_type: VariableType, init_val: Option<Constant>) -> Variable {
         with_context!(ctx, {
             let symbols = &mut ctx.symbols.borrow_mut();
             match symbols.find(name) {
@@ -33,7 +33,7 @@ impl Variable {
                     let variable = Variable {
                         name: name.to_string(),
                         var_type: var_type.clone(),
-                        value: None,
+                        value: init_val,
                     };
                     symbols.insert(variable.clone());
                     variable
