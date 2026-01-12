@@ -24,30 +24,6 @@ fn push_left(stack: &mut Vec<Expression>, root: Expression) {
     }
 }
 
-// 判断表达式是否为数值表达式
-fn is_numeric(expr: &Expression) -> bool {
-    match expr {
-        Expression::Constant(Constant::Number(_)) | Expression::Variable(_) => true,
-        Expression::Constant(Constant::Boolean(_)) => false,
-        Expression::UnaryExpression(s, _) => match s {
-            Symbol::Unary(Unary::Plus | Unary::Minus) => true,
-            Symbol::Unary(Unary::LogicNot) => false,
-            _ => panic!("unexpected symbol, expect unary operation, found {}", s)
-        }
-        Expression::BinaryExpression(_, s, _) => match s {
-            Symbol::Binary(
-                Binary::Add | Binary::Subtract | Binary::Multiply |
-                Binary::Divide | Binary::Modulus | Binary::Power) => true,
-            Symbol::Binary(Binary::LogicAnd | Binary::LogicOr) => false,
-            _ => panic!("unexpected symbol, expect binary operation, found {}", s)
-        }
-        Expression::TernaryExpression(_, _, then, _, _) => is_numeric(then),
-        Expression::Relation(_, _, _) => false,
-        _ => panic!("unsupported expression type"),
-    }
-}
-
-
 pub fn ast_to_semantic(expr: &Expression) -> SemanticExpression {
     let mut expr_stack: Vec<Expression> = Vec::new();
     let mut semantic_stack: Vec<SemanticExpression> = Vec::new();

@@ -8,6 +8,7 @@ mod lexer;
 mod parser;
 mod semantic;
 mod error;
+mod macros;
 
 fn main() {
     context! {

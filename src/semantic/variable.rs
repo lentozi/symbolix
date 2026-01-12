@@ -1,6 +1,5 @@
 use std::fmt;
 use log::warn;
-use crate::semantic::context::AnalysisContext;
 use crate::lexer::constant::Constant;
 use crate::with_context;
 
