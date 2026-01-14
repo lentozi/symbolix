@@ -1,3 +1,5 @@
+use std::fmt;
+use std::fmt::Formatter;
 use crate::lexer::constant::Number;
 use crate::semantic::semantic_ir::{LogicalExpression, NumericExpression};
 use crate::semantic::variable::Variable;
@@ -202,6 +204,20 @@ impl FromIterator<NumericExpression> for NumericBucket {
     }
 }
 
+impl fmt::Display for NumericBucket {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut iter = self.iter();
+        write!(f, "[")?;
+        if let Some(first) = iter.next() {
+            write!(f, "{:?}", first)?;
+            for expr in iter {
+                write!(f, ", {:?}", expr)?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+
 impl LogicalBucket {
     pub fn new() -> Self {
         LogicalBucket {
@@ -338,5 +354,19 @@ impl FromIterator<LogicalExpression> for LogicalBucket {
         }
 
         bucket
+    }
+}
+
+impl fmt::Display for LogicalBucket {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut iter = self.iter();
+        write!(f, "[")?;
+        if let Some(first) = iter.next() {
+            write!(f, "{:?}", first)?;
+            for expr in iter {
+                write!(f, ", {:?}", expr)?;
+            }
+        }
+        write!(f, "]")
     }
 }

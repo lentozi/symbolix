@@ -1,8 +1,10 @@
-use crate::{numeric_bucket, logical_bucket};
 use crate::lexer::constant::Number;
 use crate::lexer::symbol::{Relation, Symbol};
 use crate::semantic::bucket::{LogicalBucket, NumericBucket};
 use crate::semantic::variable::Variable;
+use crate::{logical_bucket, numeric_bucket};
+use std::fmt;
+use std::fmt::Formatter;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticExpression {
@@ -39,6 +41,15 @@ pub enum LogicalExpression {
         operator: Symbol,
         right: Box<NumericExpression>,
     },
+}
+
+impl fmt::Display for SemanticExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            SemanticExpression::Numeric(num_expr) => write!(f, "{}", num_expr),
+            SemanticExpression::Logical(log_expr) => write!(f, "{}", log_expr),
+        }
+    }
 }
 
 impl NumericExpression {
@@ -345,6 +356,42 @@ impl NumericExpression {
     }
 }
 
+impl fmt::Display for NumericExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            NumericExpression::Constant(c) => {
+                write!(f, "{}", c)
+            }
+            NumericExpression::Variable(v) => {
+                write!(f, "{}", v)
+            }
+            NumericExpression::Negation(n) => {
+                write!(f, "-({})", n)
+            }
+            NumericExpression::Addition(bucket) => {
+                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
+                write!(f, "({})", terms.join(" + "))
+            }
+            NumericExpression::Multiplication(bucket) => {
+                let factors: Vec<String> = bucket.iter().map(|factor| format!("{}", factor)).collect();
+                write!(f, "({})", factors.join(" * "))
+            }
+            NumericExpression::Power {base, exponent} => {
+                write!(f, "({})^({})", base, exponent)
+            }
+            NumericExpression::Piecewise {cases, otherwise} => {
+                for case in cases {
+                    write!(f, "{}, {};\n", case.0, case.1)?;
+                }
+                match otherwise.as_ref() {
+                    Some(expr) => write!(f, "{}, other;", expr),
+                    None => write!(f, ""),
+                }
+            }
+        }
+    }
+}
+
 impl LogicalExpression {
     pub fn constant(value: bool) -> LogicalExpression {
         LogicalExpression::Constant(value)
@@ -457,6 +504,33 @@ impl LogicalExpression {
             left: Box::new(left),
             operator,
             right: Box::new(right),
+        }
+    }
+}
+
+impl fmt::Display for LogicalExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            LogicalExpression::Constant(c) => {
+                write!(f, "{}", c)
+            }
+            LogicalExpression::Variable(v) => {
+                write!(f, "{}", v)
+            }
+            LogicalExpression::Not(n) => {
+                write!(f, "NOT ({})", n)
+            }
+            LogicalExpression::And(bucket) => {
+                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
+                write!(f, "({})", terms.join(" AND "))
+            }
+            LogicalExpression::Or(bucket) => {
+                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
+                write!(f, "({})", terms.join(" OR "))
+            }
+            LogicalExpression::Relation { left, operator, right } => {
+                write!(f, "({} {} {})", left, operator, right)
+            }
         }
     }
 }

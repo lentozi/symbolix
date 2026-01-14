@@ -26,6 +26,6 @@ fn main() {
         let expression: Expression = parser::pratt_parsing(&mut lexer, Precedence::Lowest);
         println!("{}", expression);
         let semantic_expression = ast_to_semantic(&expression);
-        println!("{:?}", semantic_expression);
+        println!("{}", semantic_expression);
     }
 }
