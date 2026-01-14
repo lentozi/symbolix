@@ -1,12 +1,13 @@
-pub mod semantic_expression;
+pub mod semantic_ir;
 pub mod variable;
 pub mod context;
+pub mod bucket;
 
 use crate::lexer::constant::{Constant, Number};
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
-use crate::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
+use crate::semantic::semantic_ir::{LogicalExpression, NumericExpression, SemanticExpression};
 use crate::semantic::variable::VariableType;
 use crate::with_context;
 

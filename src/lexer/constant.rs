@@ -1,6 +1,7 @@
 // 数字类型枚举
 
 use std::fmt;
+use std::iter::{Product, Sum};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -299,6 +300,18 @@ impl Neg for Number {
             Number::Float(f) => Number::Float(-f),
             Number::Fraction(frac) => Number::Fraction(Fraction::new(-frac.numerator, frac.denominator))
         }
+    }
+}
+
+impl Sum for Number {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Number::Integer(0), |a, b| a + b)
+    }
+}
+
+impl Product for Number {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Number::Integer(1), |a, b| a * b)
     }
 }
 

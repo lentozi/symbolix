@@ -2,9 +2,9 @@ use symbolix::lexer::constant::Number;
 use symbolix::lexer::symbol::{Relation, Symbol};
 use symbolix::lexer::Lexer;
 use symbolix::semantic::ast_to_semantic;
-use symbolix::semantic::semantic_expression::{LogicalExpression, NumericExpression, SemanticExpression};
+use symbolix::semantic::semantic_ir::{LogicalExpression, NumericExpression, SemanticExpression};
 use symbolix::semantic::variable::VariableType;
-use symbolix::{context, var};
+use symbolix::{context, logical_bucket, numeric_bucket, var};
 
 #[test]
 fn test_unary_semantic() {
@@ -13,7 +13,7 @@ fn test_unary_semantic() {
         let y = var!("y", VariableType::Integer, None);
         let input = "-x + y";
         let expected_expression = SemanticExpression::Numeric(
-            NumericExpression::Addition(vec![
+            NumericExpression::Addition(numeric_bucket![
                 NumericExpression::Negation(Box::new(NumericExpression::Variable(x))),
                 NumericExpression::Variable(y),
             ])
@@ -53,13 +53,13 @@ fn test_common_semantic() {
 
         let input = "a + b * c - d / e";
         let expected_expression = SemanticExpression::Numeric(
-            NumericExpression::Addition(vec![
+            NumericExpression::Addition(numeric_bucket![
                 NumericExpression::Variable(a),
-                NumericExpression::Multiplication(vec![
+                NumericExpression::Multiplication(numeric_bucket![
                     NumericExpression::Variable(b),
                     NumericExpression::Variable(c),
                 ]),
-                NumericExpression::Multiplication(vec![
+                NumericExpression::Multiplication(numeric_bucket![
                     NumericExpression::Constant(Number::integer(-1)),
                     NumericExpression::Variable(d),
                     NumericExpression::Power {
@@ -90,12 +90,12 @@ fn test_conditional_parsing() {
                         operator: Symbol::Relation(Relation::GreaterThan),
                         right: Box::new(NumericExpression::Constant(Number::integer(100))),
                     },
-                    NumericExpression::Multiplication(vec![
+                    NumericExpression::Multiplication(numeric_bucket![
                         NumericExpression::Constant(Number::integer(5)),
                         NumericExpression::Variable(x.clone()),
                     ]),
                 )],
-                otherwise: Some(Box::new(NumericExpression::Multiplication(vec![
+                otherwise: Some(Box::new(NumericExpression::Multiplication(numeric_bucket![
                     NumericExpression::Variable(x),
                     NumericExpression::Power {
                         base: Box::new(NumericExpression::Constant(Number::integer(2))),
@@ -127,7 +127,7 @@ fn test_nested_conditional_parsing() {
         let expected_expression = SemanticExpression::Numeric(
             NumericExpression::Piecewise {
                 cases: vec![
-                    (LogicalExpression::And(vec![
+                    (LogicalExpression::And(logical_bucket![
                         LogicalExpression::Relation {
                             left: Box::new(NumericExpression::Variable(a.clone())),
                             operator: Symbol::Relation(Relation::GreaterThan),

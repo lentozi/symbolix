@@ -1,5 +1,7 @@
+use crate::{numeric_bucket, logical_bucket};
 use crate::lexer::constant::Number;
 use crate::lexer::symbol::{Relation, Symbol};
+use crate::semantic::bucket::{LogicalBucket, NumericBucket};
 use crate::semantic::variable::Variable;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,9 +15,8 @@ pub enum NumericExpression {
     Constant(Number),
     Variable(Variable),
     Negation(Box<NumericExpression>),
-    // TODO 基于桶排序构造数据结构替代 Vec
-    Addition(Vec<NumericExpression>),
-    Multiplication(Vec<NumericExpression>), // a/b = a * b^(-1)
+    Addition(NumericBucket),
+    Multiplication(NumericBucket), // a/b = a * b^(-1)
     Power {
         base: Box<NumericExpression>,
         exponent: Box<NumericExpression>, // 是否允许任意表达式？允许：超越函数；不允许：仅允许常数指数
@@ -31,8 +32,8 @@ pub enum LogicalExpression {
     Constant(bool),
     Variable(Variable),
     Not(Box<LogicalExpression>),
-    And(Vec<LogicalExpression>),
-    Or(Vec<LogicalExpression>),
+    And(LogicalBucket),
+    Or(LogicalBucket),
     Relation {
         left: Box<NumericExpression>,
         operator: Symbol,
@@ -55,7 +56,7 @@ impl NumericExpression {
             NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr)),
             NumericExpression::Negation(inner) => *inner,
             NumericExpression::Addition(v) => {
-                let negated_terms: Vec<NumericExpression> = v.into_iter()
+                let negated_terms: NumericBucket = v.into_iter()
                     .map(|term| NumericExpression::negation(term))
                     .collect();
                 NumericExpression::Addition(negated_terms)
@@ -96,7 +97,7 @@ impl NumericExpression {
                 for (cond1, num1) in cases1 {
                     for (cond2, num2) in &cases2 {
                         new_cases.push((
-                            LogicalExpression::And(vec![cond1.clone(), cond2.clone()]),
+                            LogicalExpression::And(logical_bucket![cond1.clone(), cond2.clone()]),
                             NumericExpression::addition(num1.clone(), num2.clone()),
                         ));
                     }
@@ -159,7 +160,7 @@ impl NumericExpression {
                 NumericExpression::Addition(v1)
             }
             (NumericExpression::Addition(v), NumericExpression::Constant(n)) => {
-                let mut combined = vec![NumericExpression::Constant(n)];
+                let mut combined = numeric_bucket![NumericExpression::Constant(n)];
                 combined.extend(v);
                 NumericExpression::Addition(combined)
             }
@@ -167,19 +168,18 @@ impl NumericExpression {
                 NumericExpression::constant(c1 + c2)
             }
             (l, NumericExpression::Constant(c2)) => {                       // 常量放左侧
-                NumericExpression::Addition(vec![NumericExpression::Constant(c2), l])
+                NumericExpression::Addition(numeric_bucket![NumericExpression::Constant(c2), l])
             }
             (NumericExpression::Addition(mut v), r) => {
                 v.push(r);
                 NumericExpression::Addition(v)
             }
             (l, NumericExpression::Addition(v)) => {
-                let mut combined = Vec::with_capacity(v.len() + 1);
-                combined.push(l);
+                let mut combined = numeric_bucket![l];
                 combined.extend(v);
                 NumericExpression::Addition(combined)
             }
-            (l, r) => NumericExpression::Addition(vec![l, r]),
+            (l, r) => NumericExpression::Addition(numeric_bucket![l, r]),
         }
     }
 
@@ -205,7 +205,7 @@ impl NumericExpression {
                 for (cond1, num1) in cases1 {
                     for (cond2, num2) in &cases2 {
                         new_cases.push((
-                            LogicalExpression::And(vec![cond1.clone(), cond2.clone()]),
+                            LogicalExpression::And(logical_bucket![cond1.clone(), cond2.clone()]),
                             NumericExpression::multiplication(num1.clone(), num2.clone()),
                         ));
                     }
@@ -271,7 +271,7 @@ impl NumericExpression {
                 NumericExpression::Multiplication(v1)
             }
             (NumericExpression::Multiplication(v), NumericExpression::Constant(n)) => {
-                let mut combined = vec![NumericExpression::Constant(n)];
+                let mut combined = numeric_bucket![NumericExpression::Constant(n)];
                 combined.extend(v);
                 NumericExpression::Multiplication(combined)
             }
@@ -283,15 +283,14 @@ impl NumericExpression {
                 NumericExpression::Constant(c1 * c2)
             }
             (l, NumericExpression::Constant(c2)) => {                           // 常量放左侧
-                NumericExpression::Multiplication(vec![NumericExpression::Constant(c2), l])
+                NumericExpression::Multiplication(numeric_bucket![NumericExpression::Constant(c2), l])
             }
             (l, NumericExpression::Multiplication(v)) => {
-                let mut combined = Vec::with_capacity(v.len() + 1);
-                combined.push(l);
+                let mut combined = numeric_bucket![l];
                 combined.extend(v);
                 NumericExpression::Multiplication(combined)
             }
-            (l, r) => NumericExpression::Multiplication(vec![l, r]),
+            (l, r) => NumericExpression::Multiplication(numeric_bucket![l, r]),
         }
     }
 
@@ -305,7 +304,7 @@ impl NumericExpression {
                 }
             }
             NumericExpression::Multiplication(v) => {
-                let new_factors: Vec<NumericExpression> = v.into_iter()
+                let new_factors: NumericBucket = v.into_iter()
                     .map(|factor| NumericExpression::power(factor, exponent.clone()))
                     .collect();
                 NumericExpression::Multiplication(new_factors)
@@ -361,13 +360,13 @@ impl LogicalExpression {
             LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr)),
             LogicalExpression::Not(inner) => *inner,
             LogicalExpression::And(v) => {
-                let negated_terms: Vec<LogicalExpression> = v.into_iter()
+                let negated_terms: LogicalBucket = v.into_iter()
                     .map(|term| LogicalExpression::not(term))
                     .collect();
                 LogicalExpression::Or(negated_terms)
             }
             LogicalExpression::Or(v) => {
-                let negated_terms: Vec<LogicalExpression> = v.into_iter()
+                let negated_terms: LogicalBucket = v.into_iter()
                     .map(|term| LogicalExpression::not(term))
                     .collect();
                 LogicalExpression::And(negated_terms)
@@ -416,13 +415,12 @@ impl LogicalExpression {
             }
             // l + And
             (l, LogicalExpression::And(v)) => {
-                let mut combined = Vec::with_capacity(v.len() + 1);
-                combined.push(l);
+                let mut combined = logical_bucket![l];
                 combined.extend(v);
                 LogicalExpression::And(combined)
             }
             // fallback
-            (l, r) => LogicalExpression::And(vec![l, r]),
+            (l, r) => LogicalExpression::And(logical_bucket![l, r]),
         }
     }
 
@@ -446,12 +444,11 @@ impl LogicalExpression {
             }
             // l + Or
             (l, LogicalExpression::Or(v)) => {
-                let mut combined = Vec::with_capacity(v.len() + 1);
-                combined.push(l);
+                let mut combined = logical_bucket![l];
                 combined.extend(v);
                 LogicalExpression::Or(combined)
             }
-            (l, r) => LogicalExpression::Or(vec![l, r]),
+            (l, r) => LogicalExpression::Or(logical_bucket![l, r]),
         }
     }
 
