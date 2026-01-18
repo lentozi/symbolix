@@ -1,16 +1,12 @@
 use tree_drawer::egui_viewer::TreeViewer;
 use tree_drawer::layout::{build_layout_tree, TidyLayout};
-use crate::lexer::symbol::Precedence;
-use crate::lexer::Lexer;
-use crate::parser::expression::Expression;
-use crate::semantic::ast_to_semantic;
-use crate::semantic::variable::VariableType;
-
-mod lexer;
-mod parser;
-mod semantic;
-mod error;
-mod macros;
+use symbolix::{context, var};
+use symbolix::lexer::symbol::Precedence;
+use symbolix::lexer::Lexer;
+use symbolix::parser::expression::Expression;
+use symbolix::parser::pratt_parsing;
+use symbolix::semantic::ast_to_semantic;
+use symbolix::semantic::variable::VariableType;
 
 fn main() {
     context! {
@@ -27,7 +23,7 @@ fn main() {
         // let input = "a + b * c - d / e";
         // let input = "x > 0 ? x : -x";
         let mut lexer: Lexer = Lexer::new(input);
-        let expression: Expression = parser::pratt_parsing(&mut lexer, Precedence::Lowest);
+        let expression: Expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         let _expr_tree = expression.to_owned_tree();
         let mut semantic_expression = ast_to_semantic(&expression);
         semantic_expression.normalize();
