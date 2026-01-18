@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 nom = "8.0.0"
 log = "0.4.29"
+tree-drawer = { git = "https://github.com/lentozi/tree-drawer.git" }

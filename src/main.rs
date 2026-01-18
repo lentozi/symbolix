@@ -1,3 +1,5 @@
+use tree_drawer::egui_viewer::TreeViewer;
+use tree_drawer::layout::{build_layout_tree, TidyLayout};
 use crate::lexer::symbol::Precedence;
 use crate::lexer::Lexer;
 use crate::parser::expression::Expression;
@@ -17,15 +19,26 @@ fn main() {
         let _c = var!("c", VariableType::Integer, None);
         let _d = var!("d", VariableType::Integer, None);
         let _e = var!("e", VariableType::Integer, None);
+        let _x = var!("x", VariableType::Integer, None);
 
-        // let input = "-x + 123 + 45.67 * (89 - 0.1) ^ x";
+        let input = "-x + 123 + 45.67 * (89 - 0.1) ^ x";
         // let input = "(x > 100 ? x * (2 + 3) : x) / 2";
         // let input = "1 * (2 + 3) * 4";
-        let input = "a + b * c - d / e";
+        // let input = "a + b * c - d / e";
+        // let input = "x > 0 ? x : -x";
         let mut lexer: Lexer = Lexer::new(input);
         let expression: Expression = parser::pratt_parsing(&mut lexer, Precedence::Lowest);
+        let expr_tree = expression.to_owned_tree();
+        let mut semantic_expression = ast_to_semantic(&expression);
+        semantic_expression.normalize();
+        let semantic_tree = semantic_expression.to_owned_tree();
+
+        let mut layout = build_layout_tree(&semantic_tree);
+        TidyLayout::default().apply(&mut layout);
+        TreeViewer::new(layout)
+            .with_title("Expression Tree")
+            .run().expect("Failed to run TreeViewer");
         println!("{}", expression);
-        let semantic_expression = ast_to_semantic(&expression);
         println!("{}", semantic_expression);
     }
 }

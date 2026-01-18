@@ -2,8 +2,9 @@ pub mod semantic_ir;
 pub mod variable;
 pub mod context;
 pub mod bucket;
+mod macros;
 
-use crate::lexer::constant::{Constant, Number};
+use crate::lexer::constant::Constant;
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
@@ -61,8 +62,8 @@ pub fn ast_to_semantic(expr: &Expression) -> SemanticExpression {
                         },
                         Symbol::Binary(Binary::Subtract) => {
                             match (left_semantic, right_semantic) {
-                                (SemanticExpression::Numeric(l), SemanticExpression::Numeric(r)) =>
-                                    semantic_stack.push(SemanticExpression::Numeric(NumericExpression::addition(l, NumericExpression::negation(r)))),
+                                (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) =>
+                                    semantic_stack.push(SemanticExpression::Numeric(NumericExpression::subtraction(left, right))),
                                 _ => panic!("'-' operator applied to mismatched or logical expression types"),
                             }
                         }
@@ -75,14 +76,8 @@ pub fn ast_to_semantic(expr: &Expression) -> SemanticExpression {
                         }
                         Symbol::Binary(Binary::Divide) => {
                             match (left_semantic, right_semantic) {
-                                (SemanticExpression::Numeric(l), SemanticExpression::Numeric(r)) =>
-                                    semantic_stack.push(SemanticExpression::Numeric(NumericExpression::multiplication(
-                                        l,
-                                        NumericExpression::power(
-                                            r,
-                                            NumericExpression::constant(Number::integer(-1))
-                                        )
-                                    ))),
+                                (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) =>
+                                    semantic_stack.push(SemanticExpression::Numeric(NumericExpression::division(left, right))),
                                 _ => panic!("'/' operator applied to non-numeric expressions"),
                             }
                         }

@@ -1,4 +1,5 @@
 use std::fmt;
+use tree_drawer::tree::OwnedTree;
 use crate::lexer::constant::Constant;
 use crate::lexer::symbol::Symbol;
 
@@ -54,6 +55,45 @@ impl fmt::Display for Expression {
             Expression::Relation(left, op, right) => write!(f, "({} {} {})", left, op, right),
             Expression::TernaryExpression(cond, qmark, then_expr, colon, else_expr) => {
                 write!(f, "({} {} {} {} {})", cond, qmark, then_expr, colon, else_expr)
+            }
+        }
+    }
+}
+
+impl Expression {
+    pub fn to_owned_tree(&self) -> OwnedTree {
+        match self {
+            Expression::Constant(c) => {
+                OwnedTree::new(format!("{c}"))
+            }
+
+            Expression::Variable(name) => {
+                OwnedTree::new(name.clone())
+            }
+
+            Expression::UnaryExpression(op, expr) => {
+                OwnedTree::new(format!("{op}"))
+                    .with_child(expr.to_owned_tree())
+            }
+
+            Expression::BinaryExpression(lhs, op, rhs) => {
+                OwnedTree::new(format!("{op}"))
+                    .with_child(lhs.to_owned_tree())
+                    .with_child(rhs.to_owned_tree())
+            }
+
+            Expression::TernaryExpression(cond, op1, then_expr, op2, else_expr) => {
+                // ?: 或 if-then-else
+                OwnedTree::new(format!("{op1}{op2}"))
+                    .with_child(cond.to_owned_tree())
+                    .with_child(then_expr.to_owned_tree())
+                    .with_child(else_expr.to_owned_tree())
+            }
+
+            Expression::Relation(lhs, op, rhs) => {
+                OwnedTree::new(format!("{op}"))
+                    .with_child(lhs.to_owned_tree())
+                    .with_child(rhs.to_owned_tree())
             }
         }
     }

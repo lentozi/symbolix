@@ -5,6 +5,7 @@ use crate::semantic::variable::Variable;
 use crate::{logical_bucket, numeric_bucket};
 use std::fmt;
 use std::fmt::Formatter;
+use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticExpression {
@@ -52,6 +53,104 @@ impl fmt::Display for SemanticExpression {
     }
 }
 
+impl SemanticExpression {
+    pub fn numeric(expr: NumericExpression) -> SemanticExpression {
+        SemanticExpression::Numeric(expr)
+    }
+
+    pub fn logical(expr: LogicalExpression) -> SemanticExpression {
+        SemanticExpression::Logical(expr)
+    }
+
+    pub fn negation(expr: SemanticExpression) -> SemanticExpression {
+        match expr {
+            SemanticExpression::Numeric(n) => {
+                SemanticExpression::numeric(NumericExpression::negation(n))
+            }
+            _ => panic!("negation is only defined for numeric expressions"),
+        }
+    }
+
+    pub fn addition(term1: SemanticExpression, term2: SemanticExpression) -> SemanticExpression {
+        match (term1, term2) {
+            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
+                SemanticExpression::numeric(NumericExpression::addition(n1, n2))
+            }
+            _ => panic!("addition is only defined for numeric expressions"),
+        }
+    }
+
+    pub fn subtraction(minuend: SemanticExpression, subtrahend: SemanticExpression) -> SemanticExpression {
+        match (minuend, subtrahend) {
+            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
+                SemanticExpression::numeric(NumericExpression::subtraction(n1, n2))
+            }
+            _ => panic!("subtraction is only defined for numeric expressions"),
+        }
+    }
+
+    pub fn multiplication(factor1: SemanticExpression, factor2: SemanticExpression) -> SemanticExpression {
+        match (factor1, factor2) {
+            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
+                SemanticExpression::numeric(NumericExpression::multiplication(n1, n2))
+            }
+            _ => panic!("multiplication is only defined for numeric expressions"),
+        }
+    }
+
+    pub fn division(dividend: SemanticExpression, divisor: SemanticExpression) -> SemanticExpression {
+        match (dividend, divisor) {
+            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
+                SemanticExpression::numeric(NumericExpression::division(n1, n2))
+            }
+            _ => panic!("division is only defined for numeric expressions"),
+        }
+    }
+
+    pub fn power(base: SemanticExpression, exponent: SemanticExpression) -> SemanticExpression {
+        match (base, exponent) {
+            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
+                SemanticExpression::numeric(NumericExpression::power(n1, n2))
+            }
+            _ => panic!("power is only defined for numeric expressions"),
+        }
+    }
+
+    pub fn not(expr: SemanticExpression) -> SemanticExpression {
+        match expr {
+            SemanticExpression::Logical(l) => {
+                SemanticExpression::logical(LogicalExpression::not(l))
+            }
+            _ => panic!("not is only defined for logical expressions"),
+        }
+    }
+
+    pub fn and(expr1: SemanticExpression, expr2: SemanticExpression) -> SemanticExpression {
+        match (expr1, expr2) {
+            (SemanticExpression::Logical(l1), SemanticExpression::Logical(l2)) => {
+                SemanticExpression::logical(LogicalExpression::and(l1, l2))
+            }
+            _ => panic!("and is only defined for logical expressions"),
+        }
+    }
+
+    pub fn or(expr1: SemanticExpression, expr2: SemanticExpression) -> SemanticExpression {
+        match (expr1, expr2) {
+            (SemanticExpression::Logical(l1), SemanticExpression::Logical(l2)) => {
+                SemanticExpression::logical(LogicalExpression::or(l1, l2))
+            }
+            _ => panic!("or is only defined for logical expressions"),
+        }
+    }
+
+    pub fn normalize(&mut self) {
+        match self {
+            SemanticExpression::Numeric(n) => n.normalize(),
+            _ => {}
+        }
+    }
+}
+
 impl NumericExpression {
     pub fn constant(number: Number) -> NumericExpression {
         NumericExpression::Constant(number)
@@ -63,7 +162,7 @@ impl NumericExpression {
 
     pub fn negation(expr: NumericExpression) -> NumericExpression {
         match expr {
-            NumericExpression::Constant(_) |
+            NumericExpression::Constant(n) => NumericExpression::Constant(-n),
             NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr)),
             NumericExpression::Negation(inner) => *inner,
             NumericExpression::Addition(v) => {
@@ -194,6 +293,12 @@ impl NumericExpression {
         }
     }
 
+    pub fn subtraction(minuend: NumericExpression, subtrahend: NumericExpression) -> NumericExpression {
+        NumericExpression::addition(
+            minuend,
+            NumericExpression::negation(subtrahend),
+        )
+    }
 
     pub fn multiplication(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
         match (term1, term2) {
@@ -305,6 +410,13 @@ impl NumericExpression {
         }
     }
 
+    pub fn division(dividend: NumericExpression, divisor: NumericExpression) -> NumericExpression {
+        NumericExpression::multiplication(
+            dividend,
+            NumericExpression::power(divisor, NumericExpression::Constant(Number::integer(-1))),
+        )
+    }
+
     pub fn power(base: NumericExpression, exponent: NumericExpression) -> NumericExpression {
         match base {
             NumericExpression::Power { base: b, exponent: e } => {
@@ -354,6 +466,27 @@ impl NumericExpression {
             otherwise: otherwise.map(Box::new),
         }
     }
+
+    pub fn normalize(&mut self) {
+        // 对表达式进行层序遍历
+        let mut stack: Vec<NumericExpression> = vec![self.clone()];
+        while !stack.is_empty() {
+            match stack.pop().unwrap() {
+                NumericExpression::Addition(mut bucket) => {
+                    // 展开嵌套的加法
+                    bucket.execute_constant(true);
+                    for item in bucket {
+                        stack.push(item);
+                    }
+                }
+                NumericExpression::Multiplication(mut bucket) => {
+                    // 展开嵌套的乘法
+                    bucket.execute_constant(false);
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 impl fmt::Display for NumericExpression {
@@ -381,7 +514,7 @@ impl fmt::Display for NumericExpression {
             }
             NumericExpression::Piecewise {cases, otherwise} => {
                 for case in cases {
-                    write!(f, "{}, {};\n", case.0, case.1)?;
+                    write!(f, "{}, {};\n", case.1, case.0)?;
                 }
                 match otherwise.as_ref() {
                     Some(expr) => write!(f, "{}, other;", expr),
@@ -530,6 +663,122 @@ impl fmt::Display for LogicalExpression {
             }
             LogicalExpression::Relation { left, operator, right } => {
                 write!(f, "({} {} {})", left, operator, right)
+            }
+        }
+    }
+}
+
+impl SemanticExpression {
+    pub fn to_owned_tree(&self) -> OwnedTree {
+        match self {
+            SemanticExpression::Numeric(expr) => {
+                expr.to_owned_tree()
+            }
+            SemanticExpression::Logical(expr) => {
+                expr.to_owned_tree()
+            }
+        }
+    }
+}
+
+impl NumericExpression {
+    pub fn to_owned_tree(&self) -> OwnedTree {
+        match self {
+            NumericExpression::Constant(n) => {
+                OwnedTree::new(format!("{n}"))
+            }
+
+            NumericExpression::Variable(v) => {
+                OwnedTree::new(format!("{v}"))
+            }
+
+            NumericExpression::Negation(expr) => {
+                OwnedTree::new("-".to_string())
+                    .with_child(expr.to_owned_tree())
+            }
+
+            NumericExpression::Addition(bucket) => {
+                let mut node = OwnedTree::new("+".to_string());
+                for term in bucket.iter() {
+                    node = node.with_child(term.to_owned_tree());
+                }
+                node
+            }
+
+            NumericExpression::Multiplication(bucket) => {
+                let mut node = OwnedTree::new("*".to_string());
+                for factor in bucket.iter() {
+                    node = node.with_child(factor.to_owned_tree());
+                }
+                node
+            }
+
+            NumericExpression::Power { base, exponent } => {
+                OwnedTree::new("^".to_string())
+                    .with_child(base.to_owned_tree())
+                    .with_child(exponent.to_owned_tree())
+            }
+
+            NumericExpression::Piecewise { cases, otherwise } => {
+                let mut node = OwnedTree::new("piecewise".to_string());
+
+                for (cond, expr) in cases {
+                    node = node.with_child(
+                        OwnedTree::new("case".to_string())
+                            .with_child(cond.to_owned_tree())
+                            .with_child(expr.to_owned_tree()),
+                    );
+                }
+
+                if let Some(other) = otherwise {
+                    node = node.with_child(
+                        OwnedTree::new("otherwise".to_string())
+                            .with_child(other.to_owned_tree()),
+                    );
+                }
+
+                node
+            }
+        }
+    }
+}
+
+impl LogicalExpression {
+    pub fn to_owned_tree(&self) -> OwnedTree {
+        match self {
+            LogicalExpression::Constant(b) => {
+                OwnedTree::new(format!("{b}"))
+            }
+
+            LogicalExpression::Variable(v) => {
+                OwnedTree::new(format!("{v}"))
+            }
+
+            LogicalExpression::Not(expr) => {
+                OwnedTree::new("NOT".to_string())
+                    .with_child(expr.to_owned_tree())
+            }
+
+            LogicalExpression::And(bucket) => {
+                let mut node = OwnedTree::new("AND".to_string());
+                for term in bucket.iter() {
+                    node = node.with_child(term.to_owned_tree());
+                }
+                node
+            }
+
+            LogicalExpression::Or(bucket) => {
+                let mut node = OwnedTree::new("OR".to_string());
+                for term in bucket.iter() {
+                    node = node.with_child(term.to_owned_tree());
+                }
+                node
+            }
+
+            LogicalExpression::Relation { left, operator, right } => {
+                OwnedTree::new(format!("{operator}"))
+                    .with_child(left.to_owned_tree())
+                    .with_child(right.to_owned_tree())
             }
         }
     }

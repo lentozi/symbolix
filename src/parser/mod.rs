@@ -1,10 +1,10 @@
 pub mod expression;
 
+use crate::lexer::symbol::{get_precedence, Precedence, Symbol};
+use crate::lexer::symbol::{Binary, Other, Ternary, Unary};
 use crate::lexer::token::Token;
 use crate::lexer::Lexer;
-use crate::lexer::symbol::{get_precedence, get_symbol_type, Precedence, Symbol, SymbolType};
 use crate::parser::expression::Expression;
-use crate::lexer::symbol::{Binary, Other, Relation, Ternary, Unary};
 
 pub fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
     // nud
