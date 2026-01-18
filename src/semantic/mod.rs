@@ -8,7 +8,9 @@ use crate::lexer::constant::Constant;
 use crate::lexer::symbol::Symbol;
 use crate::lexer::symbol::{Binary, Ternary, Unary};
 use crate::parser::expression::Expression;
-use crate::semantic::semantic_ir::{LogicalExpression, NumericExpression, SemanticExpression};
+use crate::semantic::semantic_ir::logic::LogicalExpression;
+use crate::semantic::semantic_ir::numeric::NumericExpression;
+use crate::semantic::semantic_ir::SemanticExpression;
 use crate::semantic::variable::VariableType;
 use crate::with_context;
 

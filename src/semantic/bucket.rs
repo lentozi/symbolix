@@ -1,9 +1,10 @@
 use std::fmt;
 use std::fmt::Formatter;
 use crate::lexer::constant::Number;
-use crate::semantic::semantic_ir::{LogicalExpression, NumericExpression};
 use crate::semantic::variable::Variable;
 use std::vec::IntoIter;
+use crate::semantic::semantic_ir::logic::LogicalExpression;
+use crate::semantic::semantic_ir::numeric::NumericExpression;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NumericBucket {
@@ -243,6 +244,18 @@ impl LogicalBucket {
         self.constants.extend(other.constants);
         self.variables.extend(other.variables);
         self.expressions.extend(other.expressions);
+    }
+    
+    pub fn execute_constant(&mut self, op_and: bool) {
+        if op_and {
+            let result = self.constants.iter().all(|&c| c);
+            self.constants.clear();
+            self.constants.push(result);
+        } else {
+            let result = self.constants.iter().any(|&c| c);
+            self.constants.clear();
+            self.constants.push(result);
+        }
     }
 
     pub fn iter(&self) -> LogicalBucketIter<'_> {

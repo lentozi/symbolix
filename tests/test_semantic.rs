@@ -2,9 +2,11 @@ use symbolix::lexer::constant::Number;
 use symbolix::lexer::symbol::{Relation, Symbol};
 use symbolix::lexer::Lexer;
 use symbolix::semantic::ast_to_semantic;
-use symbolix::semantic::semantic_ir::{LogicalExpression, NumericExpression, SemanticExpression};
+use symbolix::semantic::semantic_ir::SemanticExpression;
 use symbolix::semantic::variable::VariableType;
 use symbolix::{context, logical_bucket, numeric_bucket, var};
+use symbolix::semantic::semantic_ir::logic::LogicalExpression;
+use symbolix::semantic::semantic_ir::numeric::NumericExpression;
 
 #[test]
 fn test_unary_semantic() {

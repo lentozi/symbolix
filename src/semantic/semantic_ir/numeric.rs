@@ -1,17 +1,11 @@
-use crate::lexer::constant::Number;
-use crate::lexer::symbol::{Relation, Symbol};
-use crate::semantic::bucket::{LogicalBucket, NumericBucket};
-use crate::semantic::variable::Variable;
-use crate::{logical_bucket, numeric_bucket};
 use std::fmt;
 use std::fmt::Formatter;
 use tree_drawer::tree::OwnedTree;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SemanticExpression {
-    Numeric(NumericExpression),
-    Logical(LogicalExpression),
-}
+use crate::lexer::constant::Number;
+use crate::{logical_bucket, numeric_bucket};
+use crate::semantic::bucket::NumericBucket;
+use crate::semantic::semantic_ir::LogicalExpression;
+use crate::semantic::variable::Variable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NumericExpression {
@@ -30,130 +24,13 @@ pub enum NumericExpression {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum LogicalExpression {
-    Constant(bool),
-    Variable(Variable),
-    Not(Box<LogicalExpression>),
-    And(LogicalBucket),
-    Or(LogicalBucket),
-    Relation {
-        left: Box<NumericExpression>,
-        operator: Symbol,
-        right: Box<NumericExpression>,
-    },
-}
-
-impl fmt::Display for SemanticExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            SemanticExpression::Numeric(num_expr) => write!(f, "{}", num_expr),
-            SemanticExpression::Logical(log_expr) => write!(f, "{}", log_expr),
-        }
-    }
-}
-
-impl SemanticExpression {
-    pub fn numeric(expr: NumericExpression) -> SemanticExpression {
-        SemanticExpression::Numeric(expr)
-    }
-
-    pub fn logical(expr: LogicalExpression) -> SemanticExpression {
-        SemanticExpression::Logical(expr)
-    }
-
-    pub fn negation(expr: SemanticExpression) -> SemanticExpression {
-        match expr {
-            SemanticExpression::Numeric(n) => {
-                SemanticExpression::numeric(NumericExpression::negation(n))
-            }
-            _ => panic!("negation is only defined for numeric expressions"),
-        }
-    }
-
-    pub fn addition(term1: SemanticExpression, term2: SemanticExpression) -> SemanticExpression {
-        match (term1, term2) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::addition(n1, n2))
-            }
-            _ => panic!("addition is only defined for numeric expressions"),
-        }
-    }
-
-    pub fn subtraction(minuend: SemanticExpression, subtrahend: SemanticExpression) -> SemanticExpression {
-        match (minuend, subtrahend) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::subtraction(n1, n2))
-            }
-            _ => panic!("subtraction is only defined for numeric expressions"),
-        }
-    }
-
-    pub fn multiplication(factor1: SemanticExpression, factor2: SemanticExpression) -> SemanticExpression {
-        match (factor1, factor2) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::multiplication(n1, n2))
-            }
-            _ => panic!("multiplication is only defined for numeric expressions"),
-        }
-    }
-
-    pub fn division(dividend: SemanticExpression, divisor: SemanticExpression) -> SemanticExpression {
-        match (dividend, divisor) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::division(n1, n2))
-            }
-            _ => panic!("division is only defined for numeric expressions"),
-        }
-    }
-
-    pub fn power(base: SemanticExpression, exponent: SemanticExpression) -> SemanticExpression {
-        match (base, exponent) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::power(n1, n2))
-            }
-            _ => panic!("power is only defined for numeric expressions"),
-        }
-    }
-
-    pub fn not(expr: SemanticExpression) -> SemanticExpression {
-        match expr {
-            SemanticExpression::Logical(l) => {
-                SemanticExpression::logical(LogicalExpression::not(l))
-            }
-            _ => panic!("not is only defined for logical expressions"),
-        }
-    }
-
-    pub fn and(expr1: SemanticExpression, expr2: SemanticExpression) -> SemanticExpression {
-        match (expr1, expr2) {
-            (SemanticExpression::Logical(l1), SemanticExpression::Logical(l2)) => {
-                SemanticExpression::logical(LogicalExpression::and(l1, l2))
-            }
-            _ => panic!("and is only defined for logical expressions"),
-        }
-    }
-
-    pub fn or(expr1: SemanticExpression, expr2: SemanticExpression) -> SemanticExpression {
-        match (expr1, expr2) {
-            (SemanticExpression::Logical(l1), SemanticExpression::Logical(l2)) => {
-                SemanticExpression::logical(LogicalExpression::or(l1, l2))
-            }
-            _ => panic!("or is only defined for logical expressions"),
-        }
-    }
-
-    pub fn normalize(&mut self) {
-        match self {
-            SemanticExpression::Numeric(n) => n.normalize(),
-            _ => {}
-        }
-    }
-}
-
 impl NumericExpression {
     pub fn constant(number: Number) -> NumericExpression {
         NumericExpression::Constant(number)
+    }
+
+    pub fn compatible_constant(number: f64) -> NumericExpression {
+        NumericExpression::Constant(Number::float(number))
     }
 
     pub fn variable(variable: Variable) -> NumericExpression {
@@ -483,6 +360,24 @@ impl NumericExpression {
                     // 展开嵌套的乘法
                     bucket.execute_constant(false);
                 }
+                NumericExpression::Negation(inner) => {
+                    stack.push(*inner);
+                }
+                NumericExpression::Power { mut base, mut exponent } => {
+                    base.normalize();
+                    exponent.normalize();
+                }
+                NumericExpression::Piecewise { cases, otherwise } => {
+                    for (mut cond, mut num) in cases {
+                        cond.normalize();
+                        num.normalize();
+                        stack.push(num);
+                    }
+                    if let Some(mut o) = otherwise {
+                        o.normalize();
+                        stack.push(*o);
+                    }
+                }
                 _ => {}
             }
         }
@@ -520,162 +415,6 @@ impl fmt::Display for NumericExpression {
                     Some(expr) => write!(f, "{}, other;", expr),
                     None => write!(f, ""),
                 }
-            }
-        }
-    }
-}
-
-impl LogicalExpression {
-    pub fn constant(value: bool) -> LogicalExpression {
-        LogicalExpression::Constant(value)
-    }
-
-    pub fn variable(variable: Variable) -> LogicalExpression {
-        LogicalExpression::Variable(variable)
-    }
-
-    pub fn not(expr: LogicalExpression) -> LogicalExpression {
-        match expr {
-            LogicalExpression::Constant(c) => LogicalExpression::Constant(!c),
-            LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr)),
-            LogicalExpression::Not(inner) => *inner,
-            LogicalExpression::And(v) => {
-                let negated_terms: LogicalBucket = v.into_iter()
-                    .map(|term| LogicalExpression::not(term))
-                    .collect();
-                LogicalExpression::Or(negated_terms)
-            }
-            LogicalExpression::Or(v) => {
-                let negated_terms: LogicalBucket = v.into_iter()
-                    .map(|term| LogicalExpression::not(term))
-                    .collect();
-                LogicalExpression::And(negated_terms)
-            }
-            LogicalExpression::Relation { left, operator: relation, right } => match relation {
-                Symbol::Relation(Relation::Equal) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::NotEqual), right
-                },
-                Symbol::Relation(Relation::NotEqual) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::Equal), right
-                },
-                Symbol::Relation(Relation::LessThan) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::GreaterEqual), right
-                },
-                Symbol::Relation(Relation::GreaterThan) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::LessEqual), right
-                },
-                Symbol::Relation(Relation::LessEqual) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::GreaterThan), right
-                },
-                Symbol::Relation(Relation::GreaterEqual) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::LessThan), right
-                },
-                _ => panic!("unsupported relation operator: {}", relation),
-            }
-        }
-    }
-
-    pub fn and(expr1: LogicalExpression, expr2: LogicalExpression) -> LogicalExpression {
-        match (expr1, expr2) {
-            // 常量折叠
-            (LogicalExpression::Constant(c1), LogicalExpression::Constant(c2)) => {
-                LogicalExpression::constant(c1 && c2)
-            }
-            (_, LogicalExpression::Constant(false)) => LogicalExpression::Constant(false),
-            (l, LogicalExpression::Constant(true)) => l,
-            // And + And
-            (LogicalExpression::And(mut v1), LogicalExpression::And(v2)) => {
-                v1.extend(v2);
-                LogicalExpression::And(v1)
-            }
-            // And + r
-            (LogicalExpression::And(mut v), r) => {
-                v.push(r);
-                LogicalExpression::And(v)
-            }
-            // l + And
-            (l, LogicalExpression::And(v)) => {
-                let mut combined = logical_bucket![l];
-                combined.extend(v);
-                LogicalExpression::And(combined)
-            }
-            // fallback
-            (l, r) => LogicalExpression::And(logical_bucket![l, r]),
-        }
-    }
-
-    pub fn or(expr1: LogicalExpression, expr2: LogicalExpression) -> LogicalExpression {
-        match (expr1, expr2) {
-            // 常量折叠
-            (LogicalExpression::Constant(c1), LogicalExpression::Constant(c2)) => {
-                LogicalExpression::constant(c1 || c2)
-            }
-            (_, LogicalExpression::Constant(true)) => LogicalExpression::Constant(true),
-            (l, LogicalExpression::Constant(false)) => l,
-            // Or + Or
-            (LogicalExpression::Or(mut v1), LogicalExpression::Or(v2)) => {
-                v1.extend(v2);
-                LogicalExpression::Or(v1)
-            }
-            // Or + r
-            (LogicalExpression::Or(mut v), r) => {
-                v.push(r);
-                LogicalExpression::Or(v)
-            }
-            // l + Or
-            (l, LogicalExpression::Or(v)) => {
-                let mut combined = logical_bucket![l];
-                combined.extend(v);
-                LogicalExpression::Or(combined)
-            }
-            (l, r) => LogicalExpression::Or(logical_bucket![l, r]),
-        }
-    }
-
-    pub fn relation(left: NumericExpression, operator: Symbol, right: NumericExpression) -> LogicalExpression {
-        LogicalExpression::Relation {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
-        }
-    }
-}
-
-impl fmt::Display for LogicalExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            LogicalExpression::Constant(c) => {
-                write!(f, "{}", c)
-            }
-            LogicalExpression::Variable(v) => {
-                write!(f, "{}", v)
-            }
-            LogicalExpression::Not(n) => {
-                write!(f, "NOT ({})", n)
-            }
-            LogicalExpression::And(bucket) => {
-                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
-                write!(f, "({})", terms.join(" AND "))
-            }
-            LogicalExpression::Or(bucket) => {
-                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
-                write!(f, "({})", terms.join(" OR "))
-            }
-            LogicalExpression::Relation { left, operator, right } => {
-                write!(f, "({} {} {})", left, operator, right)
-            }
-        }
-    }
-}
-
-impl SemanticExpression {
-    pub fn to_owned_tree(&self) -> OwnedTree {
-        match self {
-            SemanticExpression::Numeric(expr) => {
-                expr.to_owned_tree()
-            }
-            SemanticExpression::Logical(expr) => {
-                expr.to_owned_tree()
             }
         }
     }
@@ -738,47 +477,6 @@ impl NumericExpression {
                 }
 
                 node
-            }
-        }
-    }
-}
-
-impl LogicalExpression {
-    pub fn to_owned_tree(&self) -> OwnedTree {
-        match self {
-            LogicalExpression::Constant(b) => {
-                OwnedTree::new(format!("{b}"))
-            }
-
-            LogicalExpression::Variable(v) => {
-                OwnedTree::new(format!("{v}"))
-            }
-
-            LogicalExpression::Not(expr) => {
-                OwnedTree::new("NOT".to_string())
-                    .with_child(expr.to_owned_tree())
-            }
-
-            LogicalExpression::And(bucket) => {
-                let mut node = OwnedTree::new("AND".to_string());
-                for term in bucket.iter() {
-                    node = node.with_child(term.to_owned_tree());
-                }
-                node
-            }
-
-            LogicalExpression::Or(bucket) => {
-                let mut node = OwnedTree::new("OR".to_string());
-                for term in bucket.iter() {
-                    node = node.with_child(term.to_owned_tree());
-                }
-                node
-            }
-
-            LogicalExpression::Relation { left, operator, right } => {
-                OwnedTree::new(format!("{operator}"))
-                    .with_child(left.to_owned_tree())
-                    .with_child(right.to_owned_tree())
             }
         }
     }

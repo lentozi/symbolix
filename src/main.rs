@@ -28,17 +28,15 @@ fn main() {
         // let input = "x > 0 ? x : -x";
         let mut lexer: Lexer = Lexer::new(input);
         let expression: Expression = parser::pratt_parsing(&mut lexer, Precedence::Lowest);
-        let expr_tree = expression.to_owned_tree();
+        let _expr_tree = expression.to_owned_tree();
         let mut semantic_expression = ast_to_semantic(&expression);
         semantic_expression.normalize();
-        let semantic_tree = semantic_expression.to_owned_tree();
+        let _semantic_tree = semantic_expression.to_owned_tree();
 
-        let mut layout = build_layout_tree(&semantic_tree);
+        let mut layout = build_layout_tree(&_expr_tree);
         TidyLayout::default().apply(&mut layout);
         TreeViewer::new(layout)
             .with_title("Expression Tree")
             .run().expect("Failed to run TreeViewer");
-        println!("{}", expression);
-        println!("{}", semantic_expression);
     }
 }
