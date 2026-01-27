@@ -17,7 +17,7 @@ fn main() {
         let _e = var!("e", VariableType::Integer, None);
         let _x = var!("x", VariableType::Integer, None);
 
-        let input = "-x + 123 + 45.67 * (89 - 0.1) ^ x";
+        let input = "-x + 123 + 45.67 * (89 - 0.1) ^ x + 0";
         // let input = "(x > 100 ? x * (2 + 3) : x) / 2";
         // let input = "1 * (2 + 3) * 4";
         // let input = "a + b * c - d / e";
@@ -29,10 +29,15 @@ fn main() {
         semantic_expression.normalize();
         let _semantic_tree = semantic_expression.to_owned_tree();
 
-        let mut layout = build_layout_tree(&_expr_tree);
-        TidyLayout::default().apply(&mut layout);
-        TreeViewer::new(layout)
+        let mut layout1 = build_layout_tree(&_expr_tree);
+        TidyLayout::default().apply(&mut layout1);
+        TreeViewer::new(layout1)
             .with_title("Expression Tree")
+            .run().expect("Failed to run TreeViewer");
+        let mut layout2 = build_layout_tree(&_semantic_tree);
+        TidyLayout::default().apply(&mut layout2);
+        TreeViewer::new(layout2)
+            .with_title("Semantic Tree")
             .run().expect("Failed to run TreeViewer");
     }
 }

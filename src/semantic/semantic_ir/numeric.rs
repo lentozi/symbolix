@@ -1,11 +1,11 @@
-use std::fmt;
-use std::fmt::Formatter;
-use tree_drawer::tree::OwnedTree;
 use crate::lexer::constant::Number;
-use crate::{logical_bucket, numeric_bucket};
 use crate::semantic::bucket::NumericBucket;
 use crate::semantic::semantic_ir::LogicalExpression;
 use crate::semantic::variable::Variable;
+use crate::{logical_bucket, numeric_bucket};
+use std::fmt;
+use std::fmt::Formatter;
+use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NumericExpression {
@@ -43,21 +43,24 @@ impl NumericExpression {
             NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr)),
             NumericExpression::Negation(inner) => *inner,
             NumericExpression::Addition(v) => {
-                let negated_terms: NumericBucket = v.into_iter()
+                let negated_terms: NumericBucket = v
+                    .into_iter()
                     .map(|term| NumericExpression::negation(term))
                     .collect();
                 NumericExpression::Addition(negated_terms)
             }
-            NumericExpression::Multiplication(v) => {
-                NumericExpression::multiplication(NumericExpression::Multiplication(v), NumericExpression::Constant(Number::integer(-1)))
-            }
+            NumericExpression::Multiplication(v) => NumericExpression::multiplication(
+                NumericExpression::Multiplication(v),
+                NumericExpression::Constant(Number::integer(-1)),
+            ),
             NumericExpression::Power { .. } => NumericExpression::Negation(Box::new(expr)),
             NumericExpression::Piecewise { cases, otherwise } => {
                 let new_cases: Vec<(LogicalExpression, NumericExpression)> = cases
                     .into_iter()
                     .map(|(cond, num)| (cond, NumericExpression::negation(num)))
                     .collect();
-                let new_otherwise = otherwise.map(|boxed| Box::new(NumericExpression::negation(*boxed)));
+                let new_otherwise =
+                    otherwise.map(|boxed| Box::new(NumericExpression::negation(*boxed)));
                 NumericExpression::Piecewise {
                     cases: new_cases,
                     otherwise: new_otherwise,
@@ -68,15 +71,24 @@ impl NumericExpression {
 
     pub fn addition(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
         match (term1, term2) {
-            (NumericExpression::Piecewise { cases: cases1, otherwise: otherwise1 },
-                NumericExpression::Piecewise { cases: cases2, otherwise: otherwise2 }) => {
+            (
+                NumericExpression::Piecewise {
+                    cases: cases1,
+                    otherwise: otherwise1,
+                },
+                NumericExpression::Piecewise {
+                    cases: cases2,
+                    otherwise: otherwise2,
+                },
+            ) => {
                 let mut new_cases = Vec::new();
 
                 // 先算 otherwise × otherwise
                 let new_otherwise = match (&otherwise1, &otherwise2) {
-                    (Some(o1), Some(o2)) => {
-                        Some(Box::new(NumericExpression::addition((**o1).clone(), (**o2).clone())))
-                    }
+                    (Some(o1), Some(o2)) => Some(Box::new(NumericExpression::addition(
+                        (**o1).clone(),
+                        (**o2).clone(),
+                    ))),
                     _ => None,
                 };
 
@@ -91,23 +103,16 @@ impl NumericExpression {
 
                     // cases1 × otherwise2
                     if let Some(ref o2) = otherwise2 {
-                        new_cases.push((
-                            cond1,
-                            NumericExpression::addition(num1, (**o2).clone()),
-                        ));
+                        new_cases.push((cond1, NumericExpression::addition(num1, (**o2).clone())));
                     }
                 }
 
                 // otherwise1 × cases2
                 if let Some(o1) = otherwise1 {
                     for (cond2, num2) in cases2 {
-                        new_cases.push((
-                            cond2,
-                            NumericExpression::addition(*o1.clone(), num2),
-                        ));
+                        new_cases.push((cond2, NumericExpression::addition(*o1.clone(), num2)));
                     }
                 }
-
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -120,8 +125,7 @@ impl NumericExpression {
                     .map(|(cond, num)| (cond, NumericExpression::addition(num, r.clone())))
                     .collect();
 
-                let new_otherwise = otherwise
-                    .map(|o| Box::new(NumericExpression::addition(*o, r)));
+                let new_otherwise = otherwise.map(|o| Box::new(NumericExpression::addition(*o, r)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -134,8 +138,7 @@ impl NumericExpression {
                     .map(|(cond, num)| (cond, NumericExpression::addition(l.clone(), num)))
                     .collect();
 
-                let new_otherwise = otherwise
-                    .map(|o| Box::new(NumericExpression::addition(l, *o)));
+                let new_otherwise = otherwise.map(|o| Box::new(NumericExpression::addition(l, *o)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -151,10 +154,12 @@ impl NumericExpression {
                 combined.extend(v);
                 NumericExpression::Addition(combined)
             }
-            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {     // 常量折叠
+            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
+                // 常量折叠
                 NumericExpression::constant(c1 + c2)
             }
-            (l, NumericExpression::Constant(c2)) => {                       // 常量放左侧
+            (l, NumericExpression::Constant(c2)) => {
+                // 常量放左侧
                 NumericExpression::Addition(numeric_bucket![NumericExpression::Constant(c2), l])
             }
             (NumericExpression::Addition(mut v), r) => {
@@ -170,27 +175,33 @@ impl NumericExpression {
         }
     }
 
-    pub fn subtraction(minuend: NumericExpression, subtrahend: NumericExpression) -> NumericExpression {
-        NumericExpression::addition(
-            minuend,
-            NumericExpression::negation(subtrahend),
-        )
+    pub fn subtraction(
+        minuend: NumericExpression,
+        subtrahend: NumericExpression,
+    ) -> NumericExpression {
+        NumericExpression::addition(minuend, NumericExpression::negation(subtrahend))
     }
 
     pub fn multiplication(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
         match (term1, term2) {
-            (NumericExpression::Piecewise { cases: cases1, otherwise: otherwise1 },
-                NumericExpression::Piecewise { cases: cases2, otherwise: otherwise2 }) => {
+            (
+                NumericExpression::Piecewise {
+                    cases: cases1,
+                    otherwise: otherwise1,
+                },
+                NumericExpression::Piecewise {
+                    cases: cases2,
+                    otherwise: otherwise2,
+                },
+            ) => {
                 let mut new_cases = Vec::new();
 
                 // 先计算 otherwise × otherwise（避免 moved value）
                 let new_otherwise = match (&otherwise1, &otherwise2) {
-                    (Some(o1), Some(o2)) => {
-                        Some(Box::new(NumericExpression::multiplication(
-                            (**o1).clone(),
-                            (**o2).clone(),
-                        )))
-                    }
+                    (Some(o1), Some(o2)) => Some(Box::new(NumericExpression::multiplication(
+                        (**o1).clone(),
+                        (**o2).clone(),
+                    ))),
                     _ => None,
                 };
 
@@ -230,13 +241,11 @@ impl NumericExpression {
             (NumericExpression::Piecewise { cases, otherwise }, r) => {
                 let new_cases = cases
                     .into_iter()
-                    .map(|(cond, num)| {
-                        (cond, NumericExpression::multiplication(num, r.clone()))
-                    })
+                    .map(|(cond, num)| (cond, NumericExpression::multiplication(num, r.clone())))
                     .collect();
 
-                let new_otherwise = otherwise
-                    .map(|o| Box::new(NumericExpression::multiplication(*o, r)));
+                let new_otherwise =
+                    otherwise.map(|o| Box::new(NumericExpression::multiplication(*o, r)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -246,13 +255,11 @@ impl NumericExpression {
             (l, NumericExpression::Piecewise { cases, otherwise }) => {
                 let new_cases = cases
                     .into_iter()
-                    .map(|(cond, num)| {
-                        (cond, NumericExpression::multiplication(l.clone(), num))
-                    })
+                    .map(|(cond, num)| (cond, NumericExpression::multiplication(l.clone(), num)))
                     .collect();
 
-                let new_otherwise = otherwise
-                    .map(|o| Box::new(NumericExpression::multiplication(l, *o)));
+                let new_otherwise =
+                    otherwise.map(|o| Box::new(NumericExpression::multiplication(l, *o)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -272,11 +279,16 @@ impl NumericExpression {
                 v.push(r);
                 NumericExpression::Multiplication(v)
             }
-            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {         // 常量折叠
+            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
+                // 常量折叠
                 NumericExpression::Constant(c1 * c2)
             }
-            (l, NumericExpression::Constant(c2)) => {                           // 常量放左侧
-                NumericExpression::Multiplication(numeric_bucket![NumericExpression::Constant(c2), l])
+            (l, NumericExpression::Constant(c2)) => {
+                // 常量放左侧
+                NumericExpression::Multiplication(numeric_bucket![
+                    NumericExpression::Constant(c2),
+                    l
+                ])
             }
             (l, NumericExpression::Multiplication(v)) => {
                 let mut combined = numeric_bucket![l];
@@ -296,7 +308,10 @@ impl NumericExpression {
 
     pub fn power(base: NumericExpression, exponent: NumericExpression) -> NumericExpression {
         match base {
-            NumericExpression::Power { base: b, exponent: e } => {
+            NumericExpression::Power {
+                base: b,
+                exponent: e,
+            } => {
                 let new_exponent = NumericExpression::multiplication(*e, exponent);
                 NumericExpression::Power {
                     base: b,
@@ -304,7 +319,8 @@ impl NumericExpression {
                 }
             }
             NumericExpression::Multiplication(v) => {
-                let new_factors: NumericBucket = v.into_iter()
+                let new_factors: NumericBucket = v
+                    .into_iter()
                     .map(|factor| NumericExpression::power(factor, exponent.clone()))
                     .collect();
                 NumericExpression::Multiplication(new_factors)
@@ -316,19 +332,26 @@ impl NumericExpression {
         }
     }
 
-    pub fn piecewise(cases: Vec<(LogicalExpression, NumericExpression)>, otherwise: Option<NumericExpression>) -> NumericExpression {
+    pub fn piecewise(
+        cases: Vec<(LogicalExpression, NumericExpression)>,
+        otherwise: Option<NumericExpression>,
+    ) -> NumericExpression {
         // 处理三元表达式嵌套的情况
         let mut flattened_cases: Vec<(LogicalExpression, NumericExpression)> = Vec::new();
 
         for (cond, num) in cases {
             match num {
-                NumericExpression::Piecewise { cases: inner_cases, otherwise: inner_otherwise } => {
+                NumericExpression::Piecewise {
+                    cases: inner_cases,
+                    otherwise: inner_otherwise,
+                } => {
                     for (inner_cond, inner_num) in inner_cases {
                         let combined_cond = LogicalExpression::and(cond.clone(), inner_cond);
                         flattened_cases.push((combined_cond, inner_num));
                     }
                     if let Some(inner_o) = inner_otherwise {
-                        let combined_cond = LogicalExpression::and(cond.clone(), LogicalExpression::constant(true));
+                        let combined_cond =
+                            LogicalExpression::and(cond.clone(), LogicalExpression::constant(true));
                         flattened_cases.push((combined_cond, *inner_o));
                     }
                 }
@@ -345,40 +368,42 @@ impl NumericExpression {
     }
 
     pub fn normalize(&mut self) {
-        // 对表达式进行层序遍历
-        let mut stack: Vec<NumericExpression> = vec![self.clone()];
-        while !stack.is_empty() {
-            match stack.pop().unwrap() {
-                NumericExpression::Addition(mut bucket) => {
-                    // 展开嵌套的加法
-                    bucket.execute_constant(true);
-                    for item in bucket {
-                        stack.push(item);
-                    }
+        match self {
+            NumericExpression::Addition(bucket) => {
+                for expr in &mut bucket.expressions {
+                    expr.normalize();
                 }
-                NumericExpression::Multiplication(mut bucket) => {
-                    // 展开嵌套的乘法
-                    bucket.execute_constant(false);
+                bucket.execute_constant(true);
+                bucket.remove_zero();
+            }
+            NumericExpression::Multiplication(bucket) => {
+                for expr in &mut bucket.expressions {
+                    expr.normalize();
                 }
-                NumericExpression::Negation(inner) => {
-                    stack.push(*inner);
+                bucket.execute_constant(true);
+                bucket.remove_one();
+
+                if bucket.contains_zero() {
+                    *self = NumericExpression::Constant(Number::Integer(0));
                 }
-                NumericExpression::Power { mut base, mut exponent } => {
-                    base.normalize();
-                    exponent.normalize();
+            }
+            NumericExpression::Negation(inner) => {
+                inner.normalize();
+            }
+            NumericExpression::Power { base, exponent } => {
+                base.normalize();
+                exponent.normalize();
+            }
+            NumericExpression::Constant(_) => {}
+            NumericExpression::Variable(_) => {}
+            NumericExpression::Piecewise { cases, otherwise } => {
+                for (cond, num) in cases {
+                    cond.normalize();
+                    num.normalize();
                 }
-                NumericExpression::Piecewise { cases, otherwise } => {
-                    for (mut cond, mut num) in cases {
-                        cond.normalize();
-                        num.normalize();
-                        stack.push(num);
-                    }
-                    if let Some(mut o) = otherwise {
-                        o.normalize();
-                        stack.push(*o);
-                    }
+                if let Some(otherwise) = otherwise {
+                    otherwise.normalize();
                 }
-                _ => {}
             }
         }
     }
@@ -401,13 +426,14 @@ impl fmt::Display for NumericExpression {
                 write!(f, "({})", terms.join(" + "))
             }
             NumericExpression::Multiplication(bucket) => {
-                let factors: Vec<String> = bucket.iter().map(|factor| format!("{}", factor)).collect();
+                let factors: Vec<String> =
+                    bucket.iter().map(|factor| format!("{}", factor)).collect();
                 write!(f, "({})", factors.join(" * "))
             }
-            NumericExpression::Power {base, exponent} => {
+            NumericExpression::Power { base, exponent } => {
                 write!(f, "({})^({})", base, exponent)
             }
-            NumericExpression::Piecewise {cases, otherwise} => {
+            NumericExpression::Piecewise { cases, otherwise } => {
                 for case in cases {
                     write!(f, "{}, {};\n", case.1, case.0)?;
                 }
@@ -423,17 +449,12 @@ impl fmt::Display for NumericExpression {
 impl NumericExpression {
     pub fn to_owned_tree(&self) -> OwnedTree {
         match self {
-            NumericExpression::Constant(n) => {
-                OwnedTree::new(format!("{n}"))
-            }
+            NumericExpression::Constant(n) => OwnedTree::new(format!("{n}")),
 
-            NumericExpression::Variable(v) => {
-                OwnedTree::new(format!("{v}"))
-            }
+            NumericExpression::Variable(v) => OwnedTree::new(format!("{v}")),
 
             NumericExpression::Negation(expr) => {
-                OwnedTree::new("-".to_string())
-                    .with_child(expr.to_owned_tree())
+                OwnedTree::new("-".to_string()).with_child(expr.to_owned_tree())
             }
 
             NumericExpression::Addition(bucket) => {
@@ -452,11 +473,9 @@ impl NumericExpression {
                 node
             }
 
-            NumericExpression::Power { base, exponent } => {
-                OwnedTree::new("^".to_string())
-                    .with_child(base.to_owned_tree())
-                    .with_child(exponent.to_owned_tree())
-            }
+            NumericExpression::Power { base, exponent } => OwnedTree::new("^".to_string())
+                .with_child(base.to_owned_tree())
+                .with_child(exponent.to_owned_tree()),
 
             NumericExpression::Piecewise { cases, otherwise } => {
                 let mut node = OwnedTree::new("piecewise".to_string());
@@ -471,8 +490,7 @@ impl NumericExpression {
 
                 if let Some(other) = otherwise {
                     node = node.with_child(
-                        OwnedTree::new("otherwise".to_string())
-                            .with_child(other.to_owned_tree()),
+                        OwnedTree::new("otherwise".to_string()).with_child(other.to_owned_tree()),
                     );
                 }
 

@@ -1,10 +1,10 @@
-use std::fmt;
-use std::fmt::Formatter;
 use crate::lexer::constant::Number;
-use crate::semantic::variable::Variable;
-use std::vec::IntoIter;
 use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
+use crate::semantic::variable::Variable;
+use std::fmt;
+use std::fmt::Formatter;
+use std::vec::IntoIter;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NumericBucket {
@@ -94,6 +94,36 @@ impl NumericBucket {
             bucket: self,
             state: 0,
             index: 0,
+        }
+    }
+
+    pub fn contains_one(&self) -> bool {
+        if self.constants.len() == 1 && self.constants[0].is_one() {
+            return true;
+        } else if self.constants.len() > 1 {
+            panic!("must execute constant before detect.");
+        }
+        false
+    }
+
+    pub fn contains_zero(&self) -> bool {
+        if self.constants.len() == 1 && self.constants[0].is_zero() {
+            return true;
+        } else if self.constants.len() > 1 {
+            panic!("must execute constant before detect.");
+        }
+        false
+    }
+
+    pub fn remove_one(&mut self) {
+        if self.contains_one() {
+            self.constants.remove(0);
+        }
+    }
+
+    pub fn remove_zero(&mut self) {
+        if self.contains_zero() {
+            self.constants.remove(0);
         }
     }
 }
@@ -245,7 +275,7 @@ impl LogicalBucket {
         self.variables.extend(other.variables);
         self.expressions.extend(other.expressions);
     }
-    
+
     pub fn execute_constant(&mut self, op_and: bool) {
         if op_and {
             let result = self.constants.iter().all(|&c| c);

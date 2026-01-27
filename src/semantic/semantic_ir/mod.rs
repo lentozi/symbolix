@@ -1,13 +1,16 @@
-pub mod numeric;
 pub mod logic;
 mod macros;
+pub mod numeric;
 
+use crate::semantic::semantic_ir::logic::LogicalExpression;
+use crate::semantic::semantic_ir::numeric::NumericExpression;
+use crate::{
+    impl_expr_binary_operation, impl_expr_logic_operation, impl_expr_numeric_operation,
+    impl_expr_unary_operation,
+};
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
-use crate::{impl_expr_binary_operation, impl_expr_logic_operation, impl_expr_numeric_operation, impl_expr_unary_operation};
-use crate::semantic::semantic_ir::logic::LogicalExpression;
-use crate::semantic::semantic_ir::numeric::NumericExpression;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticExpression {
@@ -51,7 +54,10 @@ impl SemanticExpression {
         }
     }
 
-    pub fn subtraction(minuend: SemanticExpression, subtrahend: SemanticExpression) -> SemanticExpression {
+    pub fn subtraction(
+        minuend: SemanticExpression,
+        subtrahend: SemanticExpression,
+    ) -> SemanticExpression {
         match (minuend, subtrahend) {
             (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
                 SemanticExpression::numeric(NumericExpression::subtraction(n1, n2))
@@ -60,7 +66,10 @@ impl SemanticExpression {
         }
     }
 
-    pub fn multiplication(factor1: SemanticExpression, factor2: SemanticExpression) -> SemanticExpression {
+    pub fn multiplication(
+        factor1: SemanticExpression,
+        factor2: SemanticExpression,
+    ) -> SemanticExpression {
         match (factor1, factor2) {
             (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
                 SemanticExpression::numeric(NumericExpression::multiplication(n1, n2))
@@ -69,7 +78,10 @@ impl SemanticExpression {
         }
     }
 
-    pub fn division(dividend: SemanticExpression, divisor: SemanticExpression) -> SemanticExpression {
+    pub fn division(
+        dividend: SemanticExpression,
+        divisor: SemanticExpression,
+    ) -> SemanticExpression {
         match (dividend, divisor) {
             (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
                 SemanticExpression::numeric(NumericExpression::division(n1, n2))
@@ -126,7 +138,7 @@ impl SemanticExpression {
     pub fn normalize(&mut self) {
         match self {
             SemanticExpression::Numeric(n) => n.normalize(),
-            _ => {}
+            SemanticExpression::Logical(l) => l.normalize(),
         }
     }
 }
