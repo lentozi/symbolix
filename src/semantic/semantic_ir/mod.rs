@@ -11,8 +11,10 @@ use crate::{
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
+use crate::lexer::constant::Number;
+use crate::semantic::semantic_ir::numeric::NumericExpression::Constant;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum SemanticExpression {
     Numeric(NumericExpression),
     Logical(LogicalExpression),
@@ -140,6 +142,10 @@ impl SemanticExpression {
             SemanticExpression::Numeric(n) => n.normalize(),
             SemanticExpression::Logical(l) => l.normalize(),
         }
+    }
+
+    pub fn one() -> SemanticExpression {
+        SemanticExpression::Numeric(Constant(Number::Integer(1)))
     }
 }
 

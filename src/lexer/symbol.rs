@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Symbol {
     Unary(Unary),
     Binary(Binary),
@@ -11,14 +11,14 @@ pub enum Symbol {
     Other(Other),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Unary {
     Plus,
     Minus,
     LogicNot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Binary {
     Add,
     Subtract,
@@ -30,7 +30,7 @@ pub enum Binary {
     LogicOr,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Relation {
     Equal,          // ==
     NotEqual,       // !=
@@ -40,13 +40,13 @@ pub enum Relation {
     GreaterEqual,   // >=
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ternary {
     Conditional,      // ?
     ConditionalElse,  // :
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Other {
     LeftParen,
     RightParen,

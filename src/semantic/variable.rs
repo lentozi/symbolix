@@ -7,7 +7,7 @@ use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::{impl_var_binary_operation, impl_var_expr_binary_operation, impl_var_logic_operation, impl_var_numeric_operation, impl_var_unary_operation, with_context};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariableType {
     Integer,
     Float,
@@ -16,7 +16,7 @@ pub enum VariableType {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Variable {
     pub name: String,
     pub var_type: VariableType,

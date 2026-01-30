@@ -9,7 +9,7 @@ use crate::semantic::semantic_ir::SemanticExpression;
 use crate::semantic::variable::Variable;
 
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LogicalExpression {
     Constant(bool),
     Variable(Variable),

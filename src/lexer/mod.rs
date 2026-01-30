@@ -16,6 +16,7 @@ use nom::combinator::{map, map_res, recognize};
 pub mod constant;
 pub mod symbol;
 pub mod token;
+mod macros;
 
 fn parse_integer(input: &str) -> IResult<&str, i64> {
     i64(input)

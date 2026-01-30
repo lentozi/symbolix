@@ -2,11 +2,12 @@
   {
     "label": "Debug main",
     "build": {
-      "command": "cargo build --example main"
+      "command": "cargo",
+      "args": ["build", "--example", "main"],
     },
     "program": "$ZED_WORKTREE_ROOT/target/debug/examples/main.exe",
     "sourceLanguages": ["rust"],
     "request": "launch",
-    "adapter": "CodeLLDB"
-  }
+    "adapter": "CodeLLDB",
+  },
 ]

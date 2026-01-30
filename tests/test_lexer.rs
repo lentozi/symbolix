@@ -1,3 +1,4 @@
+use ordered_float::OrderedFloat;
 use symbolix::lexer::Lexer;
 use symbolix::lexer::constant::{Constant, Number};
 use symbolix::lexer::symbol::{Binary, Other, Relation, Symbol, Ternary, Unary};
@@ -10,12 +11,12 @@ fn test_parsing() {
     let expected_tokens = vec![
         Token::Constant(Constant::Number(Number::Integer(123))),
         Token::Symbol(Symbol::Binary(Binary::Add)),
-        Token::Constant(Constant::Number(Number::Float(45.67))),
+        Token::Constant(Constant::Number(Number::Float(OrderedFloat(45.67)))),
         Token::Symbol(Symbol::Binary(Binary::Multiply)),
         Token::Symbol(Symbol::Other(Other::LeftParen)),
         Token::Constant(Constant::Number(Number::Integer(89))),
         Token::Symbol(Symbol::Binary(Binary::Subtract)),
-        Token::Constant(Constant::Number(Number::Float(0.1))),
+        Token::Constant(Constant::Number(Number::Float(OrderedFloat(0.1)))),
         Token::Symbol(Symbol::Other(Other::RightParen)),
     ];
 

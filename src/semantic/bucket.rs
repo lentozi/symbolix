@@ -6,7 +6,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::vec::IntoIter;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct NumericBucket {
     pub constants: Vec<Number>,
     pub variables: Vec<Variable>,
@@ -30,7 +30,7 @@ pub struct NumericBucketIntoIter {
     state: u8,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct LogicalBucket {
     pub constants: Vec<bool>,
     pub variables: Vec<Variable>,
@@ -124,6 +124,29 @@ impl NumericBucket {
     pub fn remove_zero(&mut self) {
         if self.contains_zero() {
             self.constants.remove(0);
+        }
+    }
+
+    pub fn contains_constant(&self) -> bool {
+        self.constants.len() > 0
+    }
+
+    pub fn get_constants(&self) -> Vec<Number> {
+        self.constants.clone()
+    }
+
+    pub fn get_non_constants(&self) -> Vec<NumericExpression> {
+        let mut vars: Vec<NumericExpression> = self.variables.clone().into_iter().map(NumericExpression::variable).collect();
+        let mut exprs: Vec<NumericExpression> = self.expressions.clone();
+        exprs.append(&mut vars);
+        exprs
+    }
+
+    pub fn without_constants(&self) -> NumericBucket {
+        NumericBucket {
+            constants: Vec::new(),
+            variables: self.variables.clone(),
+            expressions: self.expressions.clone(),
         }
     }
 }

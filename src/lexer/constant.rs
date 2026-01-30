@@ -3,22 +3,23 @@
 use std::fmt;
 use std::iter::{Product, Sum};
 use std::ops::{Add, Div, Mul, Neg, Sub};
+use ordered_float::OrderedFloat;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Constant {
     Number(Number),
     Boolean(bool),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Number {
     Integer(i64),
-    Float(f64),
+    Float(OrderedFloat<f64>),
     Fraction(Fraction),
 }
 
 // 分数结构体
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Fraction {
     pub numerator: i64,     // 分子
     pub denominator: i64,   // 分母
@@ -111,7 +112,7 @@ impl Number {
 
     // 创建浮点数
     pub fn float(value: f64) -> Number {
-        Number::Float(value)
+        Number::Float(OrderedFloat(value))
     }
 
     // 创建分数
@@ -123,7 +124,7 @@ impl Number {
     pub fn to_float(&self) -> f64 {
         match self {
             Number::Integer(i) => *i as f64,
-            Number::Float(f) => *f,
+            Number::Float(f) => (*f).0,
             Number::Fraction(frac) => frac.to_float(),
         }
     }
@@ -134,7 +135,7 @@ impl Number {
             Number::Integer(i) => Some(*i),
             Number::Float(f) => {
                 if f.fract() == 0.0 {
-                    Some(*f as i64)
+                    Some((*f).0 as i64)
                 } else {
                     None
                 }
@@ -147,7 +148,7 @@ impl Number {
     pub fn is_zero(&self) -> bool {
         match self {
             Number::Integer(i) => *i == 0,
-            Number::Float(f) => *f == 0.0,
+            Number::Float(f) => (*f).0 == 0.0,
             Number::Fraction(frac) => frac.numerator == 0,
         }
     }
@@ -156,7 +157,7 @@ impl Number {
     pub fn is_one(&self) -> bool {
         match self {
             Number::Integer(i) => *i == 1,
-            Number::Float(f) => *f == 1.0,
+            Number::Float(f) => (*f).0 == 1.0,
             Number::Fraction(frac) => frac.numerator == frac.denominator,
         }
     }
@@ -200,16 +201,16 @@ impl Add for Number {
                 if let Some(result) = i1.checked_add(i2) {
                     Number::Integer(result)
                 } else {
-                    Number::Float(i1 as f64 + i2 as f64)
+                    Number::Float(OrderedFloat(i1 as f64 + i2 as f64))
                 }
             }
-            (Number::Integer(i1), Number::Float(f2)) => Number::Float(i1 as f64 + f2),
+            (Number::Integer(i1), Number::Float(f2)) => Number::Float(OrderedFloat(i1 as f64 + f2.0)),
             (Number::Integer(i1), Number::Fraction(frac2)) => Number::Fraction(add_fractions(&Fraction::new(i1, 1), &frac2)),
             (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 + i2 as f64),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 + f2),
             (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 + frac2.to_float()),
             (Number::Fraction(frac1), Number::Integer(i2)) => Number::Fraction(add_fractions(&frac1, &Fraction::new(i2, 1))),
-            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(frac1.to_float() + f2),
+            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(OrderedFloat(frac1.to_float() + f2.0)),
             (Number::Fraction(frac1), Number::Fraction(frac2)) => Number::Fraction(add_fractions(&frac1, &frac2)),
         }
     }
@@ -221,13 +222,13 @@ impl Sub for Number {
     fn sub(self, other: Number) -> Number {
         match (self, other) {
             (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 - i2),
-            (Number::Integer(i1), Number::Float(f2)) => Number::Float(i1 as f64 - f2),
+            (Number::Integer(i1), Number::Float(f2)) => Number::Float(OrderedFloat(i1 as f64 - f2.0)),
             (Number::Integer(i1), Number::Fraction(frac2)) => Number::Fraction(sub_fractions(&Fraction::new(i1, 1), &frac2)),
             (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 - i2 as f64),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 - f2),
             (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 - frac2.to_float()),
             (Number::Fraction(frac1), Number::Integer(i2)) => Number::Fraction(sub_fractions(&frac1, &Fraction::new(i2, 1))),
-            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(frac1.to_float() - f2),
+            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(OrderedFloat(frac1.to_float() - f2.0)),
             (Number::Fraction(frac1), Number::Fraction(frac2)) => Number::Fraction(sub_fractions(&frac1, &frac2)),
         }
     }
@@ -242,10 +243,10 @@ impl Mul for Number {
                 if let Some(result) = i1.checked_mul(i2) {
                     Number::Integer(result)
                 } else {
-                    Number::Float(i1 as f64 * i2 as f64)
+                    Number::Float(OrderedFloat(i1 as f64 * i2 as f64))
                 }
             }
-            (Number::Integer(i1), Number::Float(f2)) => Number::Float(i1 as f64 * f2),
+            (Number::Integer(i1), Number::Float(f2)) => Number::Float(OrderedFloat(i1 as f64 * f2.0)),
             (Number::Integer(i1), Number::Fraction(frac2)) => {
                 let mut result = frac2.clone();
                 result.numerator *= i1;
@@ -261,7 +262,7 @@ impl Mul for Number {
                 result.simplify();
                 Number::Fraction(result)
             },
-            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(frac1.to_float() * f2),
+            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(OrderedFloat(frac1.to_float() * f2.0)),
             (Number::Fraction(frac1), Number::Fraction(frac2)) => Number::Fraction(mul_fractions(&frac1, &frac2)),
         }
     }
@@ -279,13 +280,13 @@ impl Div for Number {
                     Number::Fraction(Fraction::new(i1, i2))
                 }
             },
-            (Number::Integer(i1), Number::Float(f2)) => Number::Float(i1 as f64 / f2),
+            (Number::Integer(i1), Number::Float(f2)) => Number::Float(OrderedFloat(i1 as f64 / f2.0)),
             (Number::Integer(i1), Number::Fraction(frac2)) => Number::Fraction(div_fractions(&Fraction::new(i1, 1), &frac2)),
             (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 / i2 as f64),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 / f2),
             (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 / frac2.to_float()),
             (Number::Fraction(frac1), Number::Integer(i2)) => Number::Fraction(div_fractions(&frac1, &Fraction::new(i2, 1))),
-            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(frac1.to_float() / f2),
+            (Number::Fraction(frac1), Number::Float(f2)) => Number::Float(OrderedFloat(frac1.to_float() / f2.0)),
             (Number::Fraction(frac1), Number::Fraction(frac2)) => Number::Fraction(div_fractions(&frac1, &frac2)),
         }
     }
@@ -342,4 +343,24 @@ fn mul_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     let mut frac = Fraction::new(a.numerator * b.numerator, a.denominator * b.denominator);
     frac.simplify();
     frac
+}
+
+impl PartialEq<i64> for Number {
+    fn eq(&self, other: &i64) -> bool {
+        match self {
+            Number::Integer(i) => i == other,
+            Number::Float(f) => (*f).0 == *other as f64,
+            Number::Fraction(frac) => frac.denominator == 1 && frac.numerator == *other,
+        }
+    }
+}
+
+impl PartialOrd<i64> for Number {
+    fn partial_cmp(&self, other: &i64) -> Option<std::cmp::Ordering> {
+        match self {
+            Number::Integer(i) => i.partial_cmp(other),
+            Number::Float(f) => (*f).0.partial_cmp(&(*other as f64)),
+            Number::Fraction(frac) => (frac.numerator as f64 / frac.denominator as f64).partial_cmp(&(*other as f64)),
+        }
+    }
 }

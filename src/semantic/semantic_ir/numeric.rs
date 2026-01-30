@@ -7,7 +7,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use tree_drawer::tree::OwnedTree;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum NumericExpression {
     Constant(Number),
     Variable(Variable),
@@ -375,15 +375,25 @@ impl NumericExpression {
                 }
                 bucket.execute_constant(true);
                 bucket.remove_zero();
+
+                if bucket.len() == 0 {
+                    *self = NumericExpression::Constant(Number::Integer(0));
+                } else if bucket.len() == 1 {
+                    *self = bucket.iter().next().unwrap();
+                }
             }
             NumericExpression::Multiplication(bucket) => {
                 for expr in &mut bucket.expressions {
                     expr.normalize();
                 }
-                bucket.execute_constant(true);
+                bucket.execute_constant(false);
                 bucket.remove_one();
 
-                if bucket.contains_zero() {
+                if bucket.len() == 0 {
+                    *self = NumericExpression::Constant(Number::Integer(0));
+                } else if bucket.len() == 1 {
+                    *self = bucket.iter().next().unwrap();
+                } else if bucket.contains_zero() {
                     *self = NumericExpression::Constant(Number::Integer(0));
                 }
             }
