@@ -1,6 +1,6 @@
 use symbolix::lexer::symbol::Precedence;
 use symbolix::lexer::Lexer;
-use symbolix::optimizer::{normalize, optimize_d1};
+use symbolix::optimizer::optimize;
 use symbolix::parser::expression::Expression;
 use symbolix::parser::pratt_parsing;
 use symbolix::semantic::ast_to_semantic;
@@ -27,11 +27,7 @@ fn main() {
         let expression: Expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         let _expr_tree = expression.to_owned_tree();
         let mut semantic_expression = ast_to_semantic(&expression);
-        // semantic_expression.normalize();
-        normalize(&mut semantic_expression);
-        optimize_d1(&mut semantic_expression);
-        // semantic_expression.normalize();
-        normalize(&mut semantic_expression);
+        optimize(&mut semantic_expression);
         println!("{}", semantic_expression);
         let _semantic_tree = semantic_expression.to_owned_tree();
 
