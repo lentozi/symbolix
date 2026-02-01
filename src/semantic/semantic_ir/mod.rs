@@ -2,8 +2,10 @@ pub mod logic;
 mod macros;
 pub mod numeric;
 
+use crate::lexer::constant::Number;
 use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
+use crate::semantic::semantic_ir::numeric::NumericExpression::Constant;
 use crate::{
     impl_expr_binary_operation, impl_expr_logic_operation, impl_expr_numeric_operation,
     impl_expr_unary_operation,
@@ -11,8 +13,6 @@ use crate::{
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
-use crate::lexer::constant::Number;
-use crate::semantic::semantic_ir::numeric::NumericExpression::Constant;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum SemanticExpression {
@@ -134,13 +134,6 @@ impl SemanticExpression {
                 SemanticExpression::logical(LogicalExpression::or(l1, l2))
             }
             _ => panic!("or is only defined for logical expressions"),
-        }
-    }
-
-    pub fn normalize(&mut self) {
-        match self {
-            SemanticExpression::Numeric(n) => n.normalize(),
-            SemanticExpression::Logical(l) => l.normalize(),
         }
     }
 

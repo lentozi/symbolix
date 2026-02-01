@@ -366,57 +366,6 @@ impl NumericExpression {
             otherwise: otherwise.map(Box::new),
         }
     }
-
-    pub fn normalize(&mut self) {
-        match self {
-            NumericExpression::Addition(bucket) => {
-                for expr in &mut bucket.expressions {
-                    expr.normalize();
-                }
-                bucket.execute_constant(true);
-                bucket.remove_zero();
-
-                if bucket.len() == 0 {
-                    *self = NumericExpression::Constant(Number::Integer(0));
-                } else if bucket.len() == 1 {
-                    *self = bucket.iter().next().unwrap();
-                }
-            }
-            NumericExpression::Multiplication(bucket) => {
-                for expr in &mut bucket.expressions {
-                    expr.normalize();
-                }
-                bucket.execute_constant(false);
-                bucket.remove_one();
-
-                if bucket.len() == 0 {
-                    *self = NumericExpression::Constant(Number::Integer(0));
-                } else if bucket.len() == 1 {
-                    *self = bucket.iter().next().unwrap();
-                } else if bucket.contains_zero() {
-                    *self = NumericExpression::Constant(Number::Integer(0));
-                }
-            }
-            NumericExpression::Negation(inner) => {
-                inner.normalize();
-            }
-            NumericExpression::Power { base, exponent } => {
-                base.normalize();
-                exponent.normalize();
-            }
-            NumericExpression::Constant(_) => {}
-            NumericExpression::Variable(_) => {}
-            NumericExpression::Piecewise { cases, otherwise } => {
-                for (cond, num) in cases {
-                    cond.normalize();
-                    num.normalize();
-                }
-                if let Some(otherwise) = otherwise {
-                    otherwise.normalize();
-                }
-            }
-        }
-    }
 }
 
 impl fmt::Display for NumericExpression {

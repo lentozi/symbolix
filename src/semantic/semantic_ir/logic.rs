@@ -1,13 +1,12 @@
-use std::fmt;
-use std::fmt::Formatter;
-use tree_drawer::tree::OwnedTree;
 use crate::lexer::symbol::{Relation, Symbol};
 use crate::logical_bucket;
 use crate::semantic::bucket::LogicalBucket;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::semantic_ir::SemanticExpression;
 use crate::semantic::variable::Variable;
-
+use std::fmt;
+use std::fmt::Formatter;
+use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LogicalExpression {
@@ -38,38 +37,56 @@ impl LogicalExpression {
             LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr)),
             LogicalExpression::Not(inner) => *inner,
             LogicalExpression::And(v) => {
-                let negated_terms: LogicalBucket = v.into_iter()
+                let negated_terms: LogicalBucket = v
+                    .into_iter()
                     .map(|term| LogicalExpression::not(term))
                     .collect();
                 LogicalExpression::Or(negated_terms)
             }
             LogicalExpression::Or(v) => {
-                let negated_terms: LogicalBucket = v.into_iter()
+                let negated_terms: LogicalBucket = v
+                    .into_iter()
                     .map(|term| LogicalExpression::not(term))
                     .collect();
                 LogicalExpression::And(negated_terms)
             }
-            LogicalExpression::Relation { left, operator: relation, right } => match relation {
+            LogicalExpression::Relation {
+                left,
+                operator: relation,
+                right,
+            } => match relation {
                 Symbol::Relation(Relation::Equal) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::NotEqual), right
+                    left,
+                    operator: Symbol::Relation(Relation::NotEqual),
+                    right,
                 },
                 Symbol::Relation(Relation::NotEqual) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::Equal), right
+                    left,
+                    operator: Symbol::Relation(Relation::Equal),
+                    right,
                 },
                 Symbol::Relation(Relation::LessThan) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::GreaterEqual), right
+                    left,
+                    operator: Symbol::Relation(Relation::GreaterEqual),
+                    right,
                 },
                 Symbol::Relation(Relation::GreaterThan) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::LessEqual), right
+                    left,
+                    operator: Symbol::Relation(Relation::LessEqual),
+                    right,
                 },
                 Symbol::Relation(Relation::LessEqual) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::GreaterThan), right
+                    left,
+                    operator: Symbol::Relation(Relation::GreaterThan),
+                    right,
                 },
                 Symbol::Relation(Relation::GreaterEqual) => LogicalExpression::Relation {
-                    left, operator: Symbol::Relation(Relation::LessThan), right
+                    left,
+                    operator: Symbol::Relation(Relation::LessThan),
+                    right,
                 },
                 _ => panic!("unsupported relation operator: {}", relation),
-            }
+            },
         }
     }
 
@@ -130,40 +147,15 @@ impl LogicalExpression {
         }
     }
 
-    pub fn relation(left: NumericExpression, operator: Symbol, right: NumericExpression) -> LogicalExpression {
+    pub fn relation(
+        left: NumericExpression,
+        operator: Symbol,
+        right: NumericExpression,
+    ) -> LogicalExpression {
         LogicalExpression::Relation {
             left: Box::new(left),
             operator,
             right: Box::new(right),
-        }
-    }
-
-    pub fn normalize(&mut self) {
-        // 对表达式进行层序遍历
-        let mut stack: Vec<LogicalExpression> = vec![self.clone()];
-        while !stack.is_empty() {
-            match stack.pop().unwrap() {
-                LogicalExpression::And(mut bucket) => {
-                    bucket.execute_constant(true);
-                    for item in bucket {
-                        stack.push(item);
-                    }
-                }
-                LogicalExpression::Or(mut bucket) => {
-                    bucket.execute_constant(false);
-                    for item in bucket {
-                        stack.push(item);
-                    }
-                }
-                LogicalExpression::Not(inner) => {
-                    stack.push(*inner);
-                }
-                LogicalExpression::Relation { mut left, operator: _, mut right } => {
-                    left.normalize();
-                    right.normalize();
-                }
-                _ => {}
-            }
         }
     }
 }
@@ -188,7 +180,11 @@ impl fmt::Display for LogicalExpression {
                 let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
                 write!(f, "({})", terms.join(" OR "))
             }
-            LogicalExpression::Relation { left, operator, right } => {
+            LogicalExpression::Relation {
+                left,
+                operator,
+                right,
+            } => {
                 write!(f, "({} {} {})", left, operator, right)
             }
         }
@@ -198,31 +194,21 @@ impl fmt::Display for LogicalExpression {
 impl SemanticExpression {
     pub fn to_owned_tree(&self) -> OwnedTree {
         match self {
-            SemanticExpression::Numeric(expr) => {
-                expr.to_owned_tree()
-            }
-            SemanticExpression::Logical(expr) => {
-                expr.to_owned_tree()
-            }
+            SemanticExpression::Numeric(expr) => expr.to_owned_tree(),
+            SemanticExpression::Logical(expr) => expr.to_owned_tree(),
         }
     }
 }
 
-
 impl LogicalExpression {
     pub fn to_owned_tree(&self) -> OwnedTree {
         match self {
-            LogicalExpression::Constant(b) => {
-                OwnedTree::new(format!("{b}"))
-            }
+            LogicalExpression::Constant(b) => OwnedTree::new(format!("{b}")),
 
-            LogicalExpression::Variable(v) => {
-                OwnedTree::new(format!("{v}"))
-            }
+            LogicalExpression::Variable(v) => OwnedTree::new(format!("{v}")),
 
             LogicalExpression::Not(expr) => {
-                OwnedTree::new("NOT".to_string())
-                    .with_child(expr.to_owned_tree())
+                OwnedTree::new("NOT".to_string()).with_child(expr.to_owned_tree())
             }
 
             LogicalExpression::And(bucket) => {
@@ -241,11 +227,13 @@ impl LogicalExpression {
                 node
             }
 
-            LogicalExpression::Relation { left, operator, right } => {
-                OwnedTree::new(format!("{operator}"))
-                    .with_child(left.to_owned_tree())
-                    .with_child(right.to_owned_tree())
-            }
+            LogicalExpression::Relation {
+                left,
+                operator,
+                right,
+            } => OwnedTree::new(format!("{operator}"))
+                .with_child(left.to_owned_tree())
+                .with_child(right.to_owned_tree()),
         }
     }
 }

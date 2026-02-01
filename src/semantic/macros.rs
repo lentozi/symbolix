@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! impl_var_binary_operation {
-        ($trait:ident, $method:ident, $variant:ident) => {
+    ($trait:ident, $method:ident, $variant:ident) => {
         impl $trait for $crate::semantic::variable::Variable {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: $crate::semantic::variable::Variable) -> Self::Output {
@@ -8,27 +8,33 @@ macro_rules! impl_var_binary_operation {
             }
         }
 
-        impl $trait<&$crate::semantic::variable::Variable> for $crate::semantic::variable::Variable {
+        impl $trait<&$crate::semantic::variable::Variable>
+            for $crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: &$crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self, rhs.clone())
             }
         }
 
-        impl $trait<$crate::semantic::variable::Variable> for &$crate::semantic::variable::Variable {
+        impl $trait<$crate::semantic::variable::Variable>
+            for &$crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: $crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self.clone(), rhs)
             }
         }
 
-        impl $trait<&$crate::semantic::variable::Variable> for &$crate::semantic::variable::Variable {
+        impl $trait<&$crate::semantic::variable::Variable>
+            for &$crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: &$crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self.clone(), rhs.clone())
             }
         }
-    }
+    };
 }
 
 #[macro_export]
@@ -49,7 +55,6 @@ macro_rules! impl_var_unary_operation {
         }
     };
 }
-
 
 #[macro_export]
 macro_rules! impl_var_numeric_operation {
@@ -124,60 +129,85 @@ macro_rules! impl_var_logic_operation {
 #[macro_export]
 macro_rules! impl_var_expr_binary_operation {
     ($trait:ident, $method:ident, $variant:ident) => {
-        impl $trait<$crate::semantic::semantic_ir::SemanticExpression> for $crate::semantic::variable::Variable {
+        impl $trait<$crate::semantic::semantic_ir::SemanticExpression>
+            for $crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
-            fn $method(self, rhs: $crate::semantic::semantic_ir::SemanticExpression) -> Self::Output {
+            fn $method(
+                self,
+                rhs: $crate::semantic::semantic_ir::SemanticExpression,
+            ) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self, rhs)
             }
         }
 
-        impl $trait<&$crate::semantic::semantic_ir::SemanticExpression> for $crate::semantic::variable::Variable {
+        impl $trait<&$crate::semantic::semantic_ir::SemanticExpression>
+            for $crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
-            fn $method(self, rhs: &$crate::semantic::semantic_ir::SemanticExpression) -> Self::Output {
+            fn $method(
+                self,
+                rhs: &$crate::semantic::semantic_ir::SemanticExpression,
+            ) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self, rhs.clone())
             }
         }
 
-        impl $trait<$crate::semantic::semantic_ir::SemanticExpression> for &$crate::semantic::variable::Variable {
+        impl $trait<$crate::semantic::semantic_ir::SemanticExpression>
+            for &$crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: SemanticExpression) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self.clone(), rhs)
             }
         }
 
-        impl $trait<&$crate::semantic::semantic_ir::SemanticExpression> for &$crate::semantic::variable::Variable {
+        impl $trait<&$crate::semantic::semantic_ir::SemanticExpression>
+            for &$crate::semantic::variable::Variable
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
-            fn $method(self, rhs: &$crate::semantic::semantic_ir::SemanticExpression) -> Self::Output {
+            fn $method(
+                self,
+                rhs: &$crate::semantic::semantic_ir::SemanticExpression,
+            ) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(self.clone(), rhs.clone())
             }
         }
 
-        impl $trait<$crate::semantic::variable::Variable> for $crate::semantic::semantic_ir::SemanticExpression {
+        impl $trait<$crate::semantic::variable::Variable>
+            for $crate::semantic::semantic_ir::SemanticExpression
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: $crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(rhs, self)
             }
         }
 
-        impl $trait<&$crate::semantic::variable::Variable> for $crate::semantic::semantic_ir::SemanticExpression {
+        impl $trait<&$crate::semantic::variable::Variable>
+            for $crate::semantic::semantic_ir::SemanticExpression
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: &$crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(rhs.clone(), self)
             }
         }
 
-        impl $trait<$crate::semantic::variable::Variable> for &$crate::semantic::semantic_ir::SemanticExpression {
+        impl $trait<$crate::semantic::variable::Variable>
+            for &$crate::semantic::semantic_ir::SemanticExpression
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: $crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(rhs, self.clone())
             }
         }
 
-        impl $trait<&$crate::semantic::variable::Variable> for &$crate::semantic::semantic_ir::SemanticExpression {
+        impl $trait<&$crate::semantic::variable::Variable>
+            for &$crate::semantic::semantic_ir::SemanticExpression
+        {
             type Output = $crate::semantic::semantic_ir::SemanticExpression;
             fn $method(self, rhs: &$crate::semantic::variable::Variable) -> Self::Output {
                 $crate::semantic::variable::Variable::$variant(rhs.clone(), self.clone())
             }
         }
-    }
+    };
 }

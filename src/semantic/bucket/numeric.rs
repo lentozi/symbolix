@@ -1,10 +1,10 @@
-use crate::lexer::constant::Number;
-use crate::semantic::semantic_ir::logic::LogicalExpression;
-use crate::semantic::semantic_ir::numeric::NumericExpression;
-use crate::semantic::variable::Variable;
-use std::fmt;
-use std::fmt::Formatter;
-use std::vec::IntoIter;
+use core::fmt;
+use std::{fmt::Formatter, slice::IterMut, vec::IntoIter};
+
+use crate::{
+    lexer::constant::Number,
+    semantic::{semantic_ir::numeric::NumericExpression, variable::Variable},
+};
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct NumericBucket {
@@ -13,7 +13,7 @@ pub struct NumericBucket {
     pub expressions: Vec<NumericExpression>,
 }
 
-// 自定义迭代器
+// 自定义不可变迭代器
 // state = 0: 常量
 // state = 1: 变量
 // state = 2: 表达式
@@ -23,6 +23,15 @@ pub struct NumericBucketIter<'a> {
     index: usize,
 }
 
+// 可变迭代器：拥有对底层三组集合的迭代器
+pub struct NumericBucketIterMut<'a> {
+    constants: IterMut<'a, Number>,
+    variables: IterMut<'a, Variable>,
+    expressions: IterMut<'a, NumericExpression>,
+    state: u8,
+}
+
+// IntoIter（获取所有者的迭代器）
 pub struct NumericBucketIntoIter {
     constants: IntoIter<Number>,
     variables: IntoIter<Variable>,
@@ -30,24 +39,12 @@ pub struct NumericBucketIntoIter {
     state: u8,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub struct LogicalBucket {
-    pub constants: Vec<bool>,
-    pub variables: Vec<Variable>,
-    pub expressions: Vec<LogicalExpression>,
-}
-
-pub struct LogicalBucketIter<'a> {
-    bucket: &'a LogicalBucket,
-    state: u8,
-    index: usize,
-}
-
-pub struct LogicalBucketIntoIter {
-    constants: IntoIter<bool>,
-    variables: IntoIter<Variable>,
-    expressions: IntoIter<LogicalExpression>,
-    state: u8,
+// 可变项的视图：因为常量与变量存储为单独类型而不是 `NumericExpression`，
+// 我们在可变迭代中返回一个包含对底层元素可变引用的枚举。
+pub enum NumericExpressionMut<'a> {
+    Constant(&'a mut Number),
+    Variable(&'a mut Variable),
+    Expression(&'a mut NumericExpression),
 }
 
 impl NumericBucket {
@@ -97,6 +94,16 @@ impl NumericBucket {
         }
     }
 
+    // 新增：可变迭代器
+    pub fn iter_mut(&'_ mut self) -> NumericBucketIterMut<'_> {
+        NumericBucketIterMut {
+            constants: self.constants.iter_mut(),
+            variables: self.variables.iter_mut(),
+            expressions: self.expressions.iter_mut(),
+            state: 0,
+        }
+    }
+
     pub fn contains_one(&self) -> bool {
         if self.constants.len() == 1 && self.constants[0].is_one() {
             return true;
@@ -136,7 +143,12 @@ impl NumericBucket {
     }
 
     pub fn get_non_constants(&self) -> Vec<NumericExpression> {
-        let mut vars: Vec<NumericExpression> = self.variables.clone().into_iter().map(NumericExpression::variable).collect();
+        let mut vars: Vec<NumericExpression> = self
+            .variables
+            .clone()
+            .into_iter()
+            .map(NumericExpression::variable)
+            .collect();
         let mut exprs: Vec<NumericExpression> = self.expressions.clone();
         exprs.append(&mut vars);
         exprs
@@ -192,6 +204,39 @@ impl<'a> Iterator for NumericBucketIter<'a> {
     }
 }
 
+impl<'a> Iterator for NumericBucketIterMut<'a> {
+    type Item = NumericExpressionMut<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.state {
+                0 => {
+                    if let Some(c) = self.constants.next() {
+                        return Some(NumericExpressionMut::Constant(c));
+                    } else {
+                        self.state = 1;
+                    }
+                }
+                1 => {
+                    if let Some(v) = self.variables.next() {
+                        return Some(NumericExpressionMut::Variable(v));
+                    } else {
+                        self.state = 2;
+                    }
+                }
+                2 => {
+                    if let Some(e) = self.expressions.next() {
+                        return Some(NumericExpressionMut::Expression(e));
+                    } else {
+                        return None;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
 impl IntoIterator for NumericBucket {
     type Item = NumericExpression;
     type IntoIter = NumericBucketIntoIter;
@@ -203,6 +248,15 @@ impl IntoIterator for NumericBucket {
             expressions: self.expressions.into_iter(),
             state: 0,
         }
+    }
+}
+
+impl<'a> IntoIterator for &'a mut NumericBucket {
+    type Item = NumericExpressionMut<'a>;
+    type IntoIter = NumericBucketIterMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }
 
@@ -259,171 +313,6 @@ impl FromIterator<NumericExpression> for NumericBucket {
 }
 
 impl fmt::Display for NumericBucket {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut iter = self.iter();
-        write!(f, "[")?;
-        if let Some(first) = iter.next() {
-            write!(f, "{:?}", first)?;
-            for expr in iter {
-                write!(f, ", {:?}", expr)?;
-            }
-        }
-        write!(f, "]")
-    }
-}
-
-impl LogicalBucket {
-    pub fn new() -> Self {
-        LogicalBucket {
-            constants: Vec::new(),
-            variables: Vec::new(),
-            expressions: Vec::new(),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.constants.len() + self.variables.len() + self.expressions.len()
-    }
-
-    pub fn push(&mut self, expr: LogicalExpression) {
-        match expr {
-            LogicalExpression::Constant(c) => self.constants.push(c),
-            LogicalExpression::Variable(v) => self.variables.push(v),
-            _ => self.expressions.push(expr),
-        }
-    }
-
-    pub fn extend(&mut self, other: LogicalBucket) {
-        self.constants.extend(other.constants);
-        self.variables.extend(other.variables);
-        self.expressions.extend(other.expressions);
-    }
-
-    pub fn execute_constant(&mut self, op_and: bool) {
-        if op_and {
-            let result = self.constants.iter().all(|&c| c);
-            self.constants.clear();
-            self.constants.push(result);
-        } else {
-            let result = self.constants.iter().any(|&c| c);
-            self.constants.clear();
-            self.constants.push(result);
-        }
-    }
-
-    pub fn iter(&self) -> LogicalBucketIter<'_> {
-        LogicalBucketIter {
-            bucket: self,
-            state: 0,
-            index: 0,
-        }
-    }
-}
-
-impl<'a> Iterator for LogicalBucketIter<'a> {
-    type Item = LogicalExpression;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.state {
-            0 => {
-                if self.index < self.bucket.constants.len() {
-                    let c = self.bucket.constants[self.index];
-                    self.index += 1;
-                    Some(LogicalExpression::Constant(c))
-                } else {
-                    self.state = 1;
-                    self.index = 0;
-                    self.next()
-                }
-            }
-            1 => {
-                if self.index < self.bucket.variables.len() {
-                    let v = self.bucket.variables[self.index].clone();
-                    self.index += 1;
-                    Some(LogicalExpression::Variable(v))
-                } else {
-                    self.state = 2;
-                    self.index = 0;
-                    self.next()
-                }
-            }
-            2 => {
-                if self.index < self.bucket.expressions.len() {
-                    let e = self.bucket.expressions[self.index].clone();
-                    self.index += 1;
-                    Some(e)
-                } else {
-                    None
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl IntoIterator for LogicalBucket {
-    type Item = LogicalExpression;
-    type IntoIter = LogicalBucketIntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        LogicalBucketIntoIter {
-            constants: self.constants.into_iter(),
-            variables: self.variables.into_iter(),
-            expressions: self.expressions.into_iter(),
-            state: 0,
-        }
-    }
-}
-
-impl Iterator for LogicalBucketIntoIter {
-    type Item = LogicalExpression;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.state {
-                0 => {
-                    if let Some(c) = self.constants.next() {
-                        return Some(LogicalExpression::Constant(c));
-                    } else {
-                        self.state = 1;
-                    }
-                }
-                1 => {
-                    if let Some(v) = self.variables.next() {
-                        return Some(LogicalExpression::Variable(v));
-                    } else {
-                        self.state = 2;
-                    }
-                }
-                2 => {
-                    return self.expressions.next();
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
-}
-
-impl FromIterator<LogicalExpression> for LogicalBucket {
-    fn from_iter<T: IntoIterator<Item = LogicalExpression>>(iter: T) -> Self {
-        let iter = iter.into_iter();
-        let (lower, _) = iter.size_hint();
-
-        let mut bucket = LogicalBucket {
-            constants: Vec::with_capacity(lower),
-            variables: Vec::with_capacity(lower),
-            expressions: Vec::with_capacity(lower),
-        };
-
-        for expr in iter {
-            bucket.push(expr);
-        }
-
-        bucket
-    }
-}
-
-impl fmt::Display for LogicalBucket {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut iter = self.iter();
         write!(f, "[")?;
