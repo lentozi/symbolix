@@ -70,6 +70,14 @@ impl LogicalBucket {
             index: 0,
         }
     }
+
+    pub fn remove_true(&mut self) {
+        self.constants.retain(|&c| !c);
+    }
+
+    pub fn remove_false(&mut self) {
+        self.constants.retain(|&c| c);
+    }
 }
 
 impl<'a> Iterator for LogicalBucketIter<'a> {

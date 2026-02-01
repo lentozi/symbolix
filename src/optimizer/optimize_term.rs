@@ -1,11 +1,7 @@
 use crate::lexer::constant::Number;
 use crate::numeric_bucket;
+use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
-
-pub enum Term {
-    AdditionTerm(AdditionTerm),
-    MultiplyTerm(MultiplyTerm),
-}
 
 pub struct AdditionTerm {
     pub coef: Number,
@@ -17,6 +13,11 @@ pub struct MultiplyTerm {
     pub exponent: Number,
 }
 
+pub struct LogicalTerm {
+    pub base: LogicalExpression,
+    pub is_not: bool,
+}
+
 impl AdditionTerm {
     pub fn new(coef: Number, core: NumericExpression) -> Self {
         AdditionTerm { coef, core }
@@ -26,6 +27,12 @@ impl AdditionTerm {
 impl MultiplyTerm {
     pub fn new(base: NumericExpression, exponent: Number) -> Self {
         MultiplyTerm { base, exponent }
+    }
+}
+
+impl LogicalTerm {
+    pub fn new(base: LogicalExpression, is_not: bool) -> Self {
+        LogicalTerm { base, is_not }
     }
 }
 
@@ -85,5 +92,20 @@ pub fn rebuild_multiply_term(term: MultiplyTerm) -> NumericExpression {
         }
     } else {
         NumericExpression::Constant(Number::Integer(1))
+    }
+}
+
+pub fn extract_logical_term(expr: LogicalExpression) -> LogicalTerm {
+    match expr {
+        LogicalExpression::Not(n) => LogicalTerm::new(*n, true),
+        _ => LogicalTerm::new(expr, false),
+    }
+}
+
+pub fn rebuild_logical_term(term: LogicalTerm) -> LogicalExpression {
+    if term.is_not {
+        LogicalExpression::Not(Box::new(term.base))
+    } else {
+        term.base
     }
 }

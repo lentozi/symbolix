@@ -26,7 +26,7 @@ pub fn normalize_numeric(expr: &mut NumericExpression) {
             bucket.remove_zero();
 
             if bucket.len() == 0 {
-                *expr = NumericExpression::Constant(Number::Integer(0));
+                unreachable!();
             } else if bucket.len() == 1 {
                 *expr = bucket.iter().next().unwrap();
             }
@@ -66,4 +66,45 @@ pub fn normalize_numeric(expr: &mut NumericExpression) {
     }
 }
 
-pub fn normalize_logic(expr: &mut LogicalExpression) {}
+pub fn normalize_logic(expr: &mut LogicalExpression) {
+    match expr {
+        LogicalExpression::And(bucket) => {
+            for expr in &mut bucket.expressions {
+                normalize_logic(expr);
+            }
+            bucket.execute_constant(true);
+            bucket.remove_true();
+
+            if bucket.len() == 0 {
+                *expr = LogicalExpression::Constant(true);
+            } else if bucket.len() == 1 {
+                *expr = bucket.iter().next().unwrap();
+            }
+        }
+        LogicalExpression::Or(bucket) => {
+            for expr in &mut bucket.expressions {
+                normalize_logic(expr);
+            }
+            bucket.execute_constant(false);
+            bucket.remove_false();
+
+            if bucket.len() == 0 {
+                unreachable!();
+            } else if bucket.len() == 1 {
+                *expr = bucket.iter().next().unwrap();
+            }
+        }
+        LogicalExpression::Not(n) => {
+            normalize_logic(n);
+        }
+        LogicalExpression::Relation {
+            left,
+            operator: _,
+            right,
+        } => {
+            normalize_numeric(left);
+            normalize_numeric(right);
+        }
+        _ => {}
+    }
+}
