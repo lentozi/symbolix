@@ -161,6 +161,28 @@ impl NumericBucket {
             expressions: self.expressions.clone(),
         }
     }
+
+    pub fn intersection(&self, other: &NumericBucket) -> NumericBucket {
+        let mut constants = self.constants.clone();
+        constants.retain(|c| other.constants.contains(c));
+        let mut variables = self.variables.clone();
+        variables.retain(|v| other.variables.contains(v));
+        let mut expressions = self.expressions.clone();
+        expressions.retain(|e| other.expressions.contains(e));
+        NumericBucket {
+            constants,
+            variables,
+            expressions,
+        }
+    }
+
+    pub fn is_all_multiples(&self) -> bool {
+        let all_multiple = self.expressions.iter().all(|e| match e {
+            NumericExpression::Multiplication(_) => true,
+            _ => false,
+        });
+        self.constants.is_empty() && self.variables.is_empty() && all_multiple
+    }
 }
 
 impl<'a> Iterator for NumericBucketIter<'a> {
