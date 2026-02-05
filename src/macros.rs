@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! context {
     { $($body:tt)* } => {{
-        let mut ctx = $crate::semantic::context::AnalysisContext::new();
+        let mut ctx = $crate::context::Context::new();
 
         ctx.with_current(|ctx| {
             let _scope = ctx.scoped();
@@ -13,7 +13,7 @@ macro_rules! context {
 #[macro_export]
 macro_rules! with_context {
     ($ctx:ident, $($body:tt)*) => {{
-        if let Some($ctx) = $crate::semantic::context::AnalysisContext::current() {
+        if let Some($ctx) = $crate::context::Context::current() {
             $($body)*
         } else {
             panic!("No current AnalysisContext found");

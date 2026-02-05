@@ -1,5 +1,4 @@
 pub mod bucket;
-pub mod context;
 mod macros;
 pub mod semantic_ir;
 pub mod variable;

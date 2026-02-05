@@ -1,11 +1,14 @@
-use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
-use log::warn;
-use crate::semantic::semantic_ir::SemanticExpression;
 use crate::lexer::constant::Constant;
 use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
-use crate::{impl_var_binary_operation, impl_var_expr_binary_operation, impl_var_logic_operation, impl_var_numeric_operation, impl_var_unary_operation, with_context};
+use crate::semantic::semantic_ir::SemanticExpression;
+use crate::{
+    impl_var_binary_operation, impl_var_expr_binary_operation, impl_var_logic_operation,
+    impl_var_numeric_operation, impl_var_unary_operation, with_context,
+};
+use log::warn;
+use std::fmt;
+use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariableType {
@@ -59,6 +62,18 @@ impl Variable {
             }
         }
     }
+
+    pub fn get_value(&self) -> Option<Constant> {
+        self.value.clone()
+    }
+
+    pub fn set_value(&mut self, value: Constant) {
+        self.value = Some(value.clone());
+        let mut symbols = with_context!(ctx, ctx.symbols.borrow_mut());
+        if let Some(symbol) = symbols.find_mut(&self.name) {
+            symbol.value = Some(value);
+        }
+    }
 }
 
 impl fmt::Display for Variable {
@@ -75,7 +90,10 @@ impl Variable {
         if self.var_type == VariableType::Unknown || other.var_type == VariableType::Unknown {
             panic!("cannot add variables with unknown type");
         }
-        SemanticExpression::numeric(NumericExpression::addition(NumericExpression::variable(self), NumericExpression::variable(other)))
+        SemanticExpression::numeric(NumericExpression::addition(
+            NumericExpression::variable(self),
+            NumericExpression::variable(other),
+        ))
     }
 
     pub fn add_expr(self, other: SemanticExpression) -> SemanticExpression {
@@ -86,9 +104,9 @@ impl Variable {
             panic!("cannot add variable with unknown type");
         }
         match other {
-            SemanticExpression::Numeric(num_expr) => {
-                SemanticExpression::numeric(NumericExpression::addition(NumericExpression::variable(self), num_expr))
-            }
+            SemanticExpression::Numeric(num_expr) => SemanticExpression::numeric(
+                NumericExpression::addition(NumericExpression::variable(self), num_expr),
+            ),
             _ => panic!("addition is only defined for numeric expressions"),
         }
     }
@@ -100,7 +118,10 @@ impl Variable {
         if self.var_type == VariableType::Unknown || other.var_type == VariableType::Unknown {
             panic!("cannot subtract variables with unknown type");
         }
-        SemanticExpression::numeric(NumericExpression::subtraction(NumericExpression::variable(self), NumericExpression::variable(other)))
+        SemanticExpression::numeric(NumericExpression::subtraction(
+            NumericExpression::variable(self),
+            NumericExpression::variable(other),
+        ))
     }
 
     pub fn sub_expr(self, other: SemanticExpression) -> SemanticExpression {
@@ -111,9 +132,9 @@ impl Variable {
             panic!("cannot subtract variable with unknown type");
         }
         match other {
-            SemanticExpression::Numeric(num_expr) => {
-                SemanticExpression::numeric(NumericExpression::subtraction(NumericExpression::variable(self), num_expr))
-            }
+            SemanticExpression::Numeric(num_expr) => SemanticExpression::numeric(
+                NumericExpression::subtraction(NumericExpression::variable(self), num_expr),
+            ),
             _ => panic!("subtraction is only defined for numeric expressions"),
         }
     }
@@ -125,7 +146,10 @@ impl Variable {
         if self.var_type == VariableType::Unknown || other.var_type == VariableType::Unknown {
             panic!("cannot multiply variables with unknown type");
         }
-        SemanticExpression::numeric(NumericExpression::multiplication(NumericExpression::variable(self), NumericExpression::variable(other)))
+        SemanticExpression::numeric(NumericExpression::multiplication(
+            NumericExpression::variable(self),
+            NumericExpression::variable(other),
+        ))
     }
 
     pub fn mul_expr(self, other: SemanticExpression) -> SemanticExpression {
@@ -136,9 +160,9 @@ impl Variable {
             panic!("cannot multiply variable with unknown type");
         }
         match other {
-            SemanticExpression::Numeric(num_expr) => {
-                SemanticExpression::numeric(NumericExpression::multiplication(NumericExpression::variable(self), num_expr))
-            }
+            SemanticExpression::Numeric(num_expr) => SemanticExpression::numeric(
+                NumericExpression::multiplication(NumericExpression::variable(self), num_expr),
+            ),
             _ => panic!("multiplication is only defined for numeric expressions"),
         }
     }
@@ -150,7 +174,10 @@ impl Variable {
         if self.var_type == VariableType::Unknown || other.var_type == VariableType::Unknown {
             panic!("cannot divide variables with unknown type");
         }
-        SemanticExpression::numeric(NumericExpression::division(NumericExpression::variable(self), NumericExpression::variable(other)))
+        SemanticExpression::numeric(NumericExpression::division(
+            NumericExpression::variable(self),
+            NumericExpression::variable(other),
+        ))
     }
 
     pub fn div_expr(self, other: SemanticExpression) -> SemanticExpression {
@@ -161,9 +188,9 @@ impl Variable {
             panic!("cannot divide variable with unknown type");
         }
         match other {
-            SemanticExpression::Numeric(num_expr) => {
-                SemanticExpression::numeric(NumericExpression::division(NumericExpression::variable(self), num_expr))
-            }
+            SemanticExpression::Numeric(num_expr) => SemanticExpression::numeric(
+                NumericExpression::division(NumericExpression::variable(self), num_expr),
+            ),
             _ => panic!("division is only defined for numeric expressions"),
         }
     }
@@ -175,7 +202,10 @@ impl Variable {
         if self.var_type == VariableType::Unknown || exponent.var_type == VariableType::Unknown {
             panic!("cannot exponentiate variables with unknown type");
         }
-        SemanticExpression::numeric(NumericExpression::power(NumericExpression::variable(self), NumericExpression::variable(exponent)))
+        SemanticExpression::numeric(NumericExpression::power(
+            NumericExpression::variable(self),
+            NumericExpression::variable(exponent),
+        ))
     }
 
     pub fn pow_expr(self, other: SemanticExpression) -> SemanticExpression {
@@ -186,9 +216,9 @@ impl Variable {
             panic!("cannot exponentiate variable with unknown type");
         }
         match other {
-            SemanticExpression::Numeric(num_expr) => {
-                SemanticExpression::numeric(NumericExpression::power(NumericExpression::variable(self), num_expr))
-            }
+            SemanticExpression::Numeric(num_expr) => SemanticExpression::numeric(
+                NumericExpression::power(NumericExpression::variable(self), num_expr),
+            ),
             _ => panic!("power is only defined for numeric expressions"),
         }
     }
@@ -200,7 +230,9 @@ impl Variable {
         if self.var_type == VariableType::Unknown {
             panic!("cannot negate variable with unknown type");
         }
-        SemanticExpression::numeric(NumericExpression::negation(NumericExpression::variable(self)))
+        SemanticExpression::numeric(NumericExpression::negation(NumericExpression::variable(
+            self,
+        )))
     }
 
     pub fn and(self, other: Variable) -> SemanticExpression {
@@ -218,12 +250,9 @@ impl Variable {
             panic!("AND operation is only defined for boolean variables");
         }
         match other {
-            SemanticExpression::Logical(log_expr) => {
-                SemanticExpression::logical(LogicalExpression::and(
-                    LogicalExpression::variable(self),
-                    log_expr,
-                ))
-            }
+            SemanticExpression::Logical(log_expr) => SemanticExpression::logical(
+                LogicalExpression::and(LogicalExpression::variable(self), log_expr),
+            ),
             _ => panic!("AND operation is only defined for logical expressions"),
         }
     }
@@ -243,12 +272,9 @@ impl Variable {
             panic!("OR operation is only defined for boolean variables");
         }
         match other {
-            SemanticExpression::Logical(log_expr) => {
-                SemanticExpression::logical(LogicalExpression::or(
-                    LogicalExpression::variable(self),
-                    log_expr,
-                ))
-            }
+            SemanticExpression::Logical(log_expr) => SemanticExpression::logical(
+                LogicalExpression::or(LogicalExpression::variable(self), log_expr),
+            ),
             _ => panic!("OR operation is only defined for logical expressions"),
         }
     }
@@ -257,9 +283,7 @@ impl Variable {
         if self.var_type != VariableType::Boolean {
             panic!("NOT operation is only defined for boolean variables");
         }
-        SemanticExpression::logical(LogicalExpression::not(
-            LogicalExpression::variable(self),
-        ))
+        SemanticExpression::logical(LogicalExpression::not(LogicalExpression::variable(self)))
     }
 }
 

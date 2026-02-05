@@ -1,6 +1,8 @@
-pub mod parser;
-pub mod lexer;
-pub mod semantic;
+pub mod compile;
+pub mod context;
 pub mod error;
+pub mod lexer;
 pub mod macros;
 pub mod optimizer;
+pub mod parser;
+pub mod semantic;

@@ -3,8 +3,14 @@ name = "symbolix"
 version = "0.1.0"
 edition = "2021"
 
+# [lib]
+# proc-macro = true
+
 [dependencies]
 nom = "8.0.0"
 log = "0.4.29"
 ordered-float = "5.1.0"
+thiserror = "1.0.39"
+# quote = "1.0.10"
+# syn = { version = "2.0", features = ["full"] }
 tree-drawer = { git = "https://github.com/lentozi/tree-drawer.git" }
