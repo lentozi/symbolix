@@ -1,11 +1,11 @@
-use symbolix::lexer::symbol::Precedence;
-use symbolix::lexer::Lexer;
-use symbolix::optimizer::optimize;
-use symbolix::parser::expression::Expression;
-use symbolix::parser::pratt_parsing;
-use symbolix::semantic::ast_to_semantic;
-use symbolix::semantic::variable::VariableType;
-use symbolix::{context, var};
+use symbolix_core::lexer::symbol::Precedence;
+use symbolix_core::lexer::Lexer;
+use symbolix_core::optimizer::optimize;
+use symbolix_core::parser::expression::Expression;
+use symbolix_core::parser::pratt_parsing;
+use symbolix_core::semantic::ast_to_semantic;
+use symbolix_core::semantic::variable::VariableType;
+use symbolix_core::{context, var};
 use tree_drawer::egui_viewer::TreeViewer;
 use tree_drawer::layout::{build_layout_tree, TidyLayout};
 

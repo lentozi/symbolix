@@ -1,5 +1,5 @@
 use ordered_float::OrderedFloat;
-use symbolix::{
+use symbolix_core::{
     compile::static_compile::compile_numeric,
     context,
     lexer::constant::{Constant, Number},

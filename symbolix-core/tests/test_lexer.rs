@@ -1,8 +1,8 @@
 use ordered_float::OrderedFloat;
-use symbolix::lexer::Lexer;
-use symbolix::lexer::constant::{Constant, Number};
-use symbolix::lexer::symbol::{Binary, Other, Relation, Symbol, Ternary, Unary};
-use symbolix::lexer::token::Token;
+use symbolix_core::lexer::constant::{Constant, Number};
+use symbolix_core::lexer::symbol::{Binary, Other, Relation, Symbol, Ternary, Unary};
+use symbolix_core::lexer::token::Token;
+use symbolix_core::lexer::Lexer;
 
 #[test]
 fn test_parsing() {

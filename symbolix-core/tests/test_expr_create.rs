@@ -1,8 +1,8 @@
-use symbolix::semantic::variable::VariableType;
-use symbolix::{context, var};
-use symbolix::semantic::semantic_ir::logic::LogicalExpression;
-use symbolix::semantic::semantic_ir::numeric::NumericExpression;
-use symbolix::semantic::semantic_ir::SemanticExpression;
+use symbolix_core::semantic::semantic_ir::logic::LogicalExpression;
+use symbolix_core::semantic::semantic_ir::numeric::NumericExpression;
+use symbolix_core::semantic::semantic_ir::SemanticExpression;
+use symbolix_core::semantic::variable::VariableType;
+use symbolix_core::{context, var};
 
 #[test]
 #[should_panic]

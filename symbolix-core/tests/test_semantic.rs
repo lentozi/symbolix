@@ -1,12 +1,13 @@
-use symbolix::lexer::constant::Number;
-use symbolix::lexer::symbol::{Relation, Symbol};
-use symbolix::lexer::Lexer;
-use symbolix::semantic::ast_to_semantic;
-use symbolix::semantic::semantic_ir::SemanticExpression;
-use symbolix::semantic::variable::VariableType;
-use symbolix::{context, logical_bucket, numeric_bucket, var};
-use symbolix::semantic::semantic_ir::logic::LogicalExpression;
-use symbolix::semantic::semantic_ir::numeric::NumericExpression;
+use symbolix_core::lexer::constant::Number;
+use symbolix_core::lexer::symbol::{Precedence, Relation, Symbol};
+use symbolix_core::lexer::Lexer;
+use symbolix_core::parser::pratt_parsing;
+use symbolix_core::semantic::ast_to_semantic;
+use symbolix_core::semantic::semantic_ir::logic::LogicalExpression;
+use symbolix_core::semantic::semantic_ir::numeric::NumericExpression;
+use symbolix_core::semantic::semantic_ir::SemanticExpression;
+use symbolix_core::semantic::variable::VariableType;
+use symbolix_core::{context, logical_bucket, numeric_bucket, var};
 
 #[test]
 fn test_unary_semantic() {
@@ -22,11 +23,10 @@ fn test_unary_semantic() {
         );
 
         let mut lexer = Lexer::new(input);
-        let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+        let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         assert_eq!(ast_to_semantic(&parsed_expression), expected_expression);
         assert!(lexer.next_token().is_none());
     }
-
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn test_logic_semantic() {
         let expected_expression = SemanticExpression::Logical(LogicalExpression::Constant(true));
 
         let mut lexer = Lexer::new(input);
-        let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+        let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         assert_eq!(ast_to_semantic(&parsed_expression), expected_expression);
         assert!(lexer.next_token().is_none());
     }
@@ -73,7 +73,7 @@ fn test_common_semantic() {
         );
 
         let mut lexer = Lexer::new(input);
-        let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+        let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         assert_eq!(ast_to_semantic(&parsed_expression), expected_expression);
         assert!(lexer.next_token().is_none());
     }
@@ -108,7 +108,7 @@ fn test_conditional_parsing() {
         );
 
         let mut lexer = Lexer::new(input);
-        let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+        let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         assert_eq!(ast_to_semantic(&parsed_expression), expected_expression);
         assert!(lexer.next_token().is_none());
     }
@@ -152,7 +152,7 @@ fn test_nested_conditional_parsing() {
         );
 
         let mut lexer = Lexer::new(input);
-        let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+        let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
         assert_eq!(ast_to_semantic(&parsed_expression), expected_expression);
         assert!(lexer.next_token().is_none());
     }

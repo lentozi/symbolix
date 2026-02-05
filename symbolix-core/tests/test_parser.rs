@@ -1,23 +1,30 @@
-use symbolix::parser::expression::Expression;
-use symbolix::lexer::constant::{Constant, Number};
-use symbolix::lexer::Lexer;
-use symbolix::lexer::symbol::{Binary, Relation, Symbol, Ternary, Unary};
+use symbolix_core::lexer::constant::{Constant, Number};
+use symbolix_core::lexer::symbol::{Binary, Precedence, Relation, Symbol, Ternary, Unary};
+use symbolix_core::lexer::Lexer;
+use symbolix_core::parser::expression::Expression;
+use symbolix_core::parser::pratt_parsing;
 
 #[test]
 fn test_unary_parsing() {
     let input = "-x + y - !z";
     let expected_expression = Expression::binary(
-        Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable("x".parse().unwrap())),
+        Expression::unary(
+            Symbol::Unary(Unary::Minus),
+            Expression::variable("x".parse().unwrap()),
+        ),
         Symbol::Binary(Binary::Add),
         Expression::binary(
             Expression::variable("y".parse().unwrap()),
             Symbol::Binary(Binary::Subtract),
-            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable("z".parse().unwrap())),
+            Expression::unary(
+                Symbol::Unary(Unary::LogicNot),
+                Expression::variable("z".parse().unwrap()),
+            ),
         ),
     );
 
     let mut lexer = Lexer::new(input);
-    let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
     assert_eq!(parsed_expression, expected_expression);
     assert!(lexer.next_token().is_none());
 }
@@ -28,17 +35,23 @@ fn test_double_unary_parsing() {
     let expected_expression = Expression::binary(
         Expression::unary(
             Symbol::Unary(Unary::LogicNot),
-            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable("a".parse().unwrap())),
+            Expression::unary(
+                Symbol::Unary(Unary::LogicNot),
+                Expression::variable("a".parse().unwrap()),
+            ),
         ),
         Symbol::Binary(Binary::Add),
         Expression::unary(
             Symbol::Unary(Unary::Minus),
-            Expression::unary(Symbol::Unary(Unary::Minus), Expression::variable("b".parse().unwrap())),
+            Expression::unary(
+                Symbol::Unary(Unary::Minus),
+                Expression::variable("b".parse().unwrap()),
+            ),
         ),
     );
 
     let mut lexer = Lexer::new(input);
-    let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
     assert_eq!(parsed_expression, expected_expression);
     assert!(lexer.next_token().is_none());
 }
@@ -48,7 +61,10 @@ fn test_logic_parsing() {
     let input = "!a && b || true";
     let expected_expression = Expression::binary(
         Expression::binary(
-            Expression::unary(Symbol::Unary(Unary::LogicNot), Expression::variable("a".parse().unwrap())),
+            Expression::unary(
+                Symbol::Unary(Unary::LogicNot),
+                Expression::variable("a".parse().unwrap()),
+            ),
             Symbol::Binary(Binary::LogicAnd),
             Expression::variable("b".parse().unwrap()),
         ),
@@ -57,7 +73,7 @@ fn test_logic_parsing() {
     );
 
     let mut lexer = Lexer::new(input);
-    let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
     assert_eq!(parsed_expression, expected_expression);
     assert!(lexer.next_token().is_none());
 }
@@ -80,11 +96,11 @@ fn test_symbol_precedence() {
                 Symbol::Binary(Binary::Divide),
                 Expression::variable("e".parse().unwrap()),
             ),
-        )
+        ),
     );
 
     let mut lexer = Lexer::new(input);
-    let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
     assert_eq!(parsed_expression, expected_expression);
     assert!(lexer.next_token().is_none());
 }
@@ -117,7 +133,7 @@ fn test_conditional_parsing() {
     );
 
     let mut lexer = Lexer::new(input);
-    let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
     assert_eq!(parsed_expression, expected_expression);
     assert!(lexer.next_token().is_none());
 }
@@ -148,7 +164,7 @@ fn test_nested_conditional_parsing() {
     );
 
     let mut lexer = Lexer::new(input);
-    let parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
     assert_eq!(parsed_expression, expected_expression);
     assert!(lexer.next_token().is_none());
 }
@@ -158,7 +174,7 @@ fn test_nested_conditional_parsing() {
 fn test_invalid_expression() {
     let input = "x + * y";
     let mut lexer = Lexer::new(input);
-    let _parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let _parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
 }
 
 #[test]
@@ -166,7 +182,7 @@ fn test_invalid_expression() {
 fn test_invalid_ternary_expression() {
     let input = "x > 0 ? : x";
     let mut lexer = Lexer::new(input);
-    let _parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let _parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
 }
 
 #[test]
@@ -174,5 +190,5 @@ fn test_invalid_ternary_expression() {
 fn test_unmatched_parentheses() {
     let input = "(x + y * (z - 1)";
     let mut lexer = Lexer::new(input);
-    let _parsed_expression = symbolix::parser::pratt_parsing(&mut lexer, symbolix::lexer::symbol::Precedence::Lowest);
+    let _parsed_expression = pratt_parsing(&mut lexer, Precedence::Lowest);
 }
