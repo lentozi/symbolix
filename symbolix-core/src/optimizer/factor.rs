@@ -9,5 +9,5 @@ pub fn factor(expr: &mut SemanticExpression) {
     }
 }
 
-pub fn factor_numeric(expr: &mut NumericExpression) {}
-pub fn factor_logic(expr: &mut LogicalExpression) {}
+pub fn factor_numeric(_expr: &mut NumericExpression) {}
+pub fn factor_logic(_expr: &mut LogicalExpression) {}

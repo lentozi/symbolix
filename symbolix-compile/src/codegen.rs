@@ -1,16 +1,11 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
-use symbolix_core::context::compile::CompileContext;
-use symbolix_core::lexer::symbol::{Precedence, Relation, Symbol};
-use symbolix_core::lexer::Lexer;
-use symbolix_core::optimizer::optimize;
-use symbolix_core::parser::expression::Expression;
-use symbolix_core::parser::pratt_parsing;
+use quote::{format_ident, quote};
+
+use symbolix_core::lexer::symbol::{Relation, Symbol};
+
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
-use symbolix_core::semantic::semantic_without_ctx;
-use symbolix_core::semantic::variable::VariableType;
 
 pub fn codegen_semantic(expr: &SemanticExpression) -> TokenStream {
     match expr {
@@ -180,6 +175,15 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
 
 #[test]
 fn test_codegen_arithmetic() {
+    use symbolix_core::context::compile::CompileContext;
+    use symbolix_core::lexer::symbol::Precedence;
+    use symbolix_core::lexer::Lexer;
+    use symbolix_core::optimizer::optimize;
+    use symbolix_core::parser::expression::Expression;
+    use symbolix_core::parser::pratt_parsing;
+    use symbolix_core::semantic::semantic_without_ctx;
+    use symbolix_core::semantic::variable::VariableType;
+
     let mut ctx = CompileContext::new();
     let input = "-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0";
     let mut lexer: Lexer = Lexer::new(input);
