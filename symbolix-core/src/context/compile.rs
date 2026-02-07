@@ -27,9 +27,13 @@ impl CompileContext {
                 && variable.var_type != VariableType::Unknown
             {
                 panic!("variable {} has conflicting types", variable.name);
-            } else {
-                self.variables.insert(variable.name.to_string(), variable);
             }
+        } else {
+            self.variables.insert(variable.name.to_string(), variable);
         }
+    }
+
+    pub fn collect_variables(&self) -> Vec<Variable> {
+        self.variables.values().cloned().collect()
     }
 }

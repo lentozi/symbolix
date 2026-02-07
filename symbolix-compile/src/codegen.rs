@@ -1,9 +1,16 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use symbolix_core::lexer::symbol::{Relation, Symbol};
+use symbolix_core::context::compile::CompileContext;
+use symbolix_core::lexer::symbol::{Precedence, Relation, Symbol};
+use symbolix_core::lexer::Lexer;
+use symbolix_core::optimizer::optimize;
+use symbolix_core::parser::expression::Expression;
+use symbolix_core::parser::pratt_parsing;
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
+use symbolix_core::semantic::semantic_without_ctx;
+use symbolix_core::semantic::variable::VariableType;
 
 pub fn codegen_semantic(expr: &SemanticExpression) -> TokenStream {
     match expr {
@@ -24,7 +31,7 @@ pub fn codegen_numeric(expr: &NumericExpression) -> TokenStream {
         }
         NumericExpression::Negation(inner) => {
             let inner_code = codegen_numeric(inner);
-            quote! { -#inner_code }
+            quote! { (-#inner_code) }
         }
         NumericExpression::Addition(bucket) => {
             let mut terms = Vec::new();
@@ -63,7 +70,7 @@ pub fn codegen_numeric(expr: &NumericExpression) -> TokenStream {
             if terms.is_empty() {
                 quote! { 1.0 }
             } else {
-                quote! { #(#terms)* }
+                quote! { 1.0 #(* #terms)* }
             }
         }
         NumericExpression::Power { base, exponent } => {
@@ -104,7 +111,7 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
             quote! { #c }
         }
         LogicalExpression::Variable(v) => {
-            let name = format_ident!("{}", v.name);
+            let name = syn::Ident::new(&v.name, proc_macro2::Span::call_site());
             quote! { #name }
         }
         LogicalExpression::Not(inner) => {
@@ -171,20 +178,50 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
     }
 }
 
-// #[test]
-// fn test_codegen_arithmetic() {
-//     context! {
-//         let _ = var!("x", VariableType::Integer, None);
-//         let _ = var!("y", VariableType::Integer, None);
+#[test]
+fn test_codegen_arithmetic() {
+    let mut ctx = CompileContext::new();
+    let input = "-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0";
+    let mut lexer: Lexer = Lexer::new(input);
+    let expression: Expression = pratt_parsing(&mut lexer, Precedence::Lowest);
+    let mut semantic = semantic_without_ctx(&expression, true, &mut ctx);
+    optimize(&mut semantic);
+    let code = codegen_semantic(&semantic);
+    println!("{}", code);
 
-//         let input = "x * 2 + y";
-//         let mut lexer = Lexer::new(input);
-//         let mut expression = pratt_parsing(&mut lexer, Precedence::Lowest);
-//         let mut semantic_expression = ast_to_semantic(&expression);
+    let variables = ctx.collect_variables();
+    let var_names = variables
+        .iter()
+        .map(|variable| syn::Ident::new(&variable.name, proc_macro2::Span::call_site()));
+    let var_types = variables.iter().map(|variable| match variable.var_type {
+        VariableType::Float | VariableType::Fraction | VariableType::Integer => quote! { f64 },
+        VariableType::Boolean => quote! { bool },
+        _ => panic!("invalid variable type"),
+    });
 
-//         let tokens = codegen_semantic(&semantic_expression);
-//         let code = tokens.to_string();
+    let doc_comment = format!(
+        "Compiled Formula\n\nArguments in order: ({})",
+        variables
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
-//         println!("generated code: {}", code);
-//     }
-// }
+    let expanded = quote! {
+        {
+            struct CompiledFormula;
+
+            impl CompiledFormula {
+                #[doc = #doc_comment]
+                pub fn calculate(&self, #(#var_names: #var_types),*) -> f64 {
+                    #code
+                }
+            }
+
+            CompiledFormula
+        }
+    };
+
+    println!("{}", expanded.to_string());
+}
