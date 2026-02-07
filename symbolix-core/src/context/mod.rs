@@ -3,6 +3,7 @@ use crate::semantic::variable::Variable;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+pub mod compile;
 pub mod symbol_context;
 
 pub type Scope = HashMap<String, Variable>;

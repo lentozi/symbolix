@@ -1,5 +1,5 @@
 [workspace]
-members = ["symbolix-core"]
+members = ["symbolix-core", "symbolix-compile"]
 
 [package]
 name = "symbolix"
@@ -11,3 +11,4 @@ edition = "2021"
 
 [dependencies]
 symbolix-core = { path = "./symbolix-core" }
+symbolix-compile = { path = "./symbolix-compile" }

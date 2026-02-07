@@ -6,7 +6,6 @@ use crate::{
     impl_var_binary_operation, impl_var_expr_binary_operation, impl_var_logic_operation,
     impl_var_numeric_operation, impl_var_unary_operation, with_context,
 };
-use log::warn;
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
 
@@ -28,25 +27,30 @@ pub struct Variable {
 
 impl Variable {
     pub fn new(name: &str, var_type: VariableType, init_val: Option<Constant>) -> Variable {
-        with_context!(ctx, {
-            let symbols = &mut ctx.symbols.borrow_mut();
-            match symbols.find(name) {
-                Some(res) => {
-                    warn!("variable '{}' already exists in the current context", name);
-                    res
-                }
-                None => {
-                    // Variable does not exist in the current context, proceed to create a new one
-                    let variable = Variable {
-                        name: name.to_string(),
-                        var_type: var_type.clone(),
-                        value: init_val,
-                    };
-                    symbols.insert(variable.clone());
-                    variable
-                }
-            }
-        })
+        // with_context!(ctx, {
+        //     let symbols = &mut ctx.symbols.borrow_mut();
+        //     match symbols.find(name) {
+        //         Some(res) => {
+        //             warn!("variable '{}' already exists in the current context", name);
+        //             res
+        //         }
+        //         None => {
+        //             // Variable does not exist in the current context, proceed to create a new one
+        //             let variable = Variable {
+        //                 name: name.to_string(),
+        //                 var_type: var_type.clone(),
+        //                 value: init_val,
+        //             };
+        //             symbols.insert(variable.clone());
+        //             variable
+        //         }
+        //     }
+        // })
+        Variable {
+            name: name.to_string(),
+            var_type,
+            value: init_val,
+        }
     }
 
     pub fn to_expression(&self) -> SemanticExpression {
