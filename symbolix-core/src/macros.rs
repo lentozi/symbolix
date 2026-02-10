@@ -1,28 +1,4 @@
 #[macro_export]
-macro_rules! context {
-    { $($body:tt)* } => {{
-        let mut ctx = $crate::context::Context::new();
-
-        ctx.with_current(|ctx| {
-            let _scope = ctx.scoped();
-            $($body)*
-        })
-    }};
-}
-// TODO 如果两个 context! 嵌套了怎么办
-
-#[macro_export]
-macro_rules! with_context {
-    ($ctx:ident, $($body:tt)*) => {{
-        if let Some($ctx) = $crate::context::Context::current() {
-            $($body)*
-        } else {
-            panic!("No current AnalysisContext found");
-        }
-    }};
-}
-
-#[macro_export]
 macro_rules! var {
     ($name:expr, $var_type:expr, $init_val:expr) => {
         $crate::semantic::variable::Variable::new($name, $var_type, $init_val)
