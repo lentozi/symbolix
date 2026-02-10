@@ -5,9 +5,8 @@ members = ["symbolix-core", "symbolix-compile"]
 name = "symbolix"
 version = "0.1.0"
 edition = "2021"
-
-# [lib]
-# proc-macro = true
+license = "MIT"
+license-file = "LICENSE"
 
 [dependencies]
 symbolix-core = { path = "./symbolix-core" }
