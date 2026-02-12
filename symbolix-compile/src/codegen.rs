@@ -2,7 +2,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use symbolix_core::lexer::symbol::{Relation, Symbol};
-
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
@@ -183,49 +182,51 @@ fn test_codegen_arithmetic() {
     use symbolix_core::parser::pratt_parsing;
     use symbolix_core::semantic::semantic_without_ctx;
     use symbolix_core::semantic::variable::VariableType;
+    use symbolix_core::{new_compile_context, with_compile_context};
 
-    let mut ctx = CompileContext::new();
-    let input = "-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0";
-    let mut lexer: Lexer = Lexer::new(input);
-    let expression: Expression = pratt_parsing(&mut lexer, Precedence::Lowest);
-    let mut semantic = semantic_without_ctx(&expression, true, &mut ctx);
-    optimize(&mut semantic);
-    let code = codegen_semantic(&semantic);
-    println!("{}", code);
+    new_compile_context! {
+        let input = "-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0";
+        let mut lexer: Lexer = Lexer::new(input);
+        let expression: Expression = pratt_parsing(&mut lexer, Precedence::Lowest);
+        let mut semantic = semantic_without_ctx(&expression, true);
+        optimize(&mut semantic);
+        let code = codegen_semantic(&semantic);
+        println!("{}", code);
 
-    let variables = ctx.collect_variables();
-    let var_names = variables
-        .iter()
-        .map(|variable| syn::Ident::new(&variable.name, proc_macro2::Span::call_site()));
-    let var_types = variables.iter().map(|variable| match variable.var_type {
-        VariableType::Float | VariableType::Fraction | VariableType::Integer => quote! { f64 },
-        VariableType::Boolean => quote! { bool },
-        _ => panic!("invalid variable type"),
-    });
-
-    let doc_comment = format!(
-        "Compiled Formula\n\nArguments in order: ({})",
-        variables
+        let variables = with_compile_context!(ctx, ctx.collect_variables());
+        let var_names = variables
             .iter()
-            .map(|v| v.name.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
+            .map(|variable| syn::Ident::new(&variable.name, proc_macro2::Span::call_site()));
+        let var_types = variables.iter().map(|variable| match variable.var_type {
+            VariableType::Float | VariableType::Fraction | VariableType::Integer => quote! { f64 },
+            VariableType::Boolean => quote! { bool },
+            _ => panic!("invalid variable type"),
+        });
 
-    let expanded = quote! {
-        {
-            struct CompiledFormula;
+        let doc_comment = format!(
+            "Compiled Formula\n\nArguments in order: ({})",
+            variables
+                .iter()
+                .map(|v| v.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
 
-            impl CompiledFormula {
-                #[doc = #doc_comment]
-                pub fn calculate(&self, #(#var_names: #var_types),*) -> f64 {
-                    #code
+        let expanded = quote! {
+            {
+                struct CompiledFormula;
+
+                impl CompiledFormula {
+                    #[doc = #doc_comment]
+                    pub fn calculate(&self, #(#var_names: #var_types),*) -> f64 {
+                        #code
+                    }
                 }
+
+                CompiledFormula
             }
+        };
 
-            CompiledFormula
-        }
-    };
-
-    println!("{}", expanded.to_string());
+        println!("{}", expanded.to_string());
+    }
 }

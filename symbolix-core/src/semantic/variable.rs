@@ -4,7 +4,7 @@ use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::semantic_ir::SemanticExpression;
 use crate::{
     impl_var_binary_operation, impl_var_expr_binary_operation, impl_var_logic_operation,
-    impl_var_numeric_operation, impl_var_unary_operation,
+    impl_var_numeric_operation, impl_var_unary_operation, with_compile_context,
 };
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
@@ -26,12 +26,17 @@ pub struct Variable {
 }
 
 impl Variable {
+    /**
+     * 初始化时会自动注册到编译上下文中
+     */
     pub fn new(name: &str, var_type: VariableType, init_val: Option<Constant>) -> Variable {
-        Variable {
+        let variable = Variable {
             name: name.to_string(),
             var_type,
             value: init_val,
-        }
+        };
+        with_compile_context!(ctx, ctx.register_variable(variable.clone()));
+        variable
     }
 
     pub fn to_expression(&self) -> SemanticExpression {
