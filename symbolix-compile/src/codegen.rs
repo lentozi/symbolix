@@ -174,7 +174,6 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
 
 #[test]
 fn test_codegen_arithmetic() {
-    use symbolix_core::context::compile::CompileContext;
     use symbolix_core::lexer::symbol::Precedence;
     use symbolix_core::lexer::Lexer;
     use symbolix_core::optimizer::optimize;

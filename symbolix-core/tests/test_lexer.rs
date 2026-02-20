@@ -1,113 +1,148 @@
-use ordered_float::OrderedFloat;
-use symbolix_core::lexer::constant::{Constant, Number};
-use symbolix_core::lexer::symbol::{Binary, Other, Relation, Symbol, Ternary, Unary};
-use symbolix_core::lexer::token::Token;
-use symbolix_core::lexer::Lexer;
+use symbolix_core::{
+    lexer::constant::{Fraction, Number},
+    new_compile_context,
+};
 
 #[test]
-fn test_parsing() {
-    let input = "123 + 45.67 * (89 - 0.1)";
+fn lexer_tokenizes_identifiers() {
+    use symbolix_core::lexer::token::Token;
+    use symbolix_core::lexer::Lexer;
+
+    let input = "foo bar _baz qux123";
     let mut lexer = Lexer::new(input);
-    let expected_tokens = vec![
-        Token::Constant(Constant::Number(Number::Integer(123))),
-        Token::Symbol(Symbol::Binary(Binary::Add)),
-        Token::Constant(Constant::Number(Number::Float(OrderedFloat(45.67)))),
-        Token::Symbol(Symbol::Binary(Binary::Multiply)),
-        Token::Symbol(Symbol::Other(Other::LeftParen)),
-        Token::Constant(Constant::Number(Number::Integer(89))),
-        Token::Symbol(Symbol::Binary(Binary::Subtract)),
-        Token::Constant(Constant::Number(Number::Float(OrderedFloat(0.1)))),
-        Token::Symbol(Symbol::Other(Other::RightParen)),
+
+    let expected = vec![
+        Token::variable(String::from("foo")),
+        Token::variable(String::from("bar")),
+        Token::variable(String::from("_baz")),
+        Token::variable(String::from("qux123")),
     ];
 
-    for expected in expected_tokens {
-        let token = lexer.next_token().expect("Expected a token");
-        assert_eq!(token, expected);
-    }
-
-    assert!(lexer.next_token().is_none());
+    assert_eq!(lexer.tokens(), expected);
 }
 
 #[test]
-fn test_ternary_expression() {
-    let input = "x > 0 ? x : -x";
+fn lexer_tokenizes_float_and_scientific() {
+    use symbolix_core::lexer::constant::Constant;
+    use symbolix_core::lexer::token::Token;
+    use symbolix_core::lexer::Lexer;
+
+    let input = "123.456 1.23e-4 1E6";
     let mut lexer = Lexer::new(input);
-    let expected_tokens = vec![
-        Token::Variable("x".parse().unwrap()),
-        Token::Symbol(Symbol::Relation(Relation::GreaterThan)),
-        Token::Constant(Constant::Number(Number::Integer(0))),
-        Token::Symbol(Symbol::Ternary(Ternary::Conditional)),
-        Token::Variable("x".parse().unwrap()),
-        Token::Symbol(Symbol::Ternary(Ternary::ConditionalElse)),
-        Token::Symbol(Symbol::Binary(Binary::Subtract)),
-        Token::Variable("x".parse().unwrap()),
+
+    let expected = vec![
+        Token::constant(Constant::float(123.456)),
+        Token::constant(Constant::float(1.23e-4)),
+        Token::constant(Constant::float(1e6)),
     ];
 
-    for expected in expected_tokens {
-        let token = lexer.next_token().expect("Expected a token");
-        assert_eq!(token, expected);
-    }
-
-    assert!(lexer.next_token().is_none());
+    assert_eq!(lexer.tokens(), expected);
 }
 
 #[test]
-fn test_logical_expression() {
-    let input = "a && true || !c";
-    let mut lexer = Lexer::new(input);
-    let expected_tokens = vec![
-        Token::Variable("a".parse().unwrap()),
-        Token::Symbol(Symbol::Binary(Binary::LogicAnd)),
-        Token::Constant(Constant::boolean(true)),
-        Token::Symbol(Symbol::Binary(Binary::LogicOr)),
-        Token::Symbol(Symbol::Unary(Unary::LogicNot)),
-        Token::Variable("c".parse().unwrap()),
-    ];
+fn lexer_tokenizes_operators_and_punctuators() {
+    use symbolix_core::lexer::symbol::{Binary, Relation, Symbol, Unary};
+    use symbolix_core::lexer::token::Token;
+    use symbolix_core::lexer::Lexer;
 
-    for expected in expected_tokens {
-        let token = lexer.next_token().expect("Expected a token");
-        assert_eq!(token, expected);
+    new_compile_context! {
+        let input = "+ - * / % ^ && || ! < > <= >= == !=";
+        let mut lexer = Lexer::new(input);
+
+        let expected = vec![
+            Token::symbol(Symbol::Binary(Binary::Add)),
+            Token::symbol(Symbol::Binary(Binary::Subtract)),
+            Token::symbol(Symbol::Binary(Binary::Multiply)),
+            Token::symbol(Symbol::Binary(Binary::Divide)),
+            Token::symbol(Symbol::Binary(Binary::Modulus)),
+            Token::symbol(Symbol::Binary(Binary::Power)),
+            Token::symbol(Symbol::Binary(Binary::LogicAnd)),
+            Token::symbol(Symbol::Binary(Binary::LogicOr)),
+            Token::symbol(Symbol::Unary(Unary::LogicNot)),
+            Token::symbol(Symbol::Relation(Relation::LessThan)),
+            Token::symbol(Symbol::Relation(Relation::GreaterThan)),
+            Token::symbol(Symbol::Relation(Relation::LessEqual)),
+            Token::symbol(Symbol::Relation(Relation::GreaterEqual)),
+            Token::symbol(Symbol::Relation(Relation::Equal)),
+            Token::symbol(Symbol::Relation(Relation::NotEqual)),
+        ];
+
+        assert_eq!(lexer.tokens(), expected);
     }
-
-    assert!(lexer.next_token().is_none());
 }
 
 #[test]
-fn test_variable_parsing() {
-    let input = "var_name123 + anotherVar - _tempVar";
-    let mut lexer = Lexer::new(input);
-    let expected_tokens = vec![
-        Token::Variable("var_name123".parse().unwrap()),
-        Token::Symbol(Symbol::Binary(Binary::Add)),
-        Token::Variable("anotherVar".parse().unwrap()),
-        Token::Symbol(Symbol::Binary(Binary::Subtract)),
-        Token::Variable("_tempVar".parse().unwrap()),
-    ];
+fn lexer_handles_unicode_identifiers() {
+    use symbolix_core::lexer::token::Token;
+    use symbolix_core::lexer::Lexer;
 
-    for expected in expected_tokens {
-        let token = lexer.next_token().expect("Expected a token");
-        assert_eq!(token, expected);
+    new_compile_context! {
+        let mut lexer = Lexer::new("变量 αβγδε");
+
+        let expected = vec![
+            Token::variable(String::from("变量")),
+            Token::variable(String::from("αβγδε")),
+        ];
+
+        assert_eq!(lexer.tokens(), expected);
     }
-
-    assert!(lexer.next_token().is_none());
 }
 
 #[test]
-fn test_boolean_parsing() {
-    let input = "true && false || true";
-    let mut lexer = Lexer::new(input);
-    let expected_tokens = vec![
-        Token::Constant(Constant::Boolean(true)),
-        Token::Symbol(Symbol::Binary(Binary::LogicAnd)),
-        Token::Constant(Constant::Boolean(false)),
-        Token::Symbol(Symbol::Binary(Binary::LogicOr)),
-        Token::Constant(Constant::Boolean(true)),
-    ];
+fn lexer_position_and_span_consistency() {
+    use symbolix_core::lexer::token::Token;
+    use symbolix_core::lexer::Lexer;
 
-    for expected in expected_tokens {
-        let token = lexer.next_token().expect("Expected a token");
-        assert_eq!(token, expected);
+    new_compile_context! {
+        let input = "foo bar _baz
+                    qux123";
+        let mut lexer = Lexer::new(input);
+
+        let expected = vec![
+            Token::variable(String::from("foo")),
+            Token::variable(String::from("bar")),
+            Token::variable(String::from("_baz")),
+            Token::variable(String::from("qux123")),
+        ];
+
+        assert_eq!(lexer.tokens(), expected);
     }
+}
 
-    assert!(lexer.next_token().is_none());
+#[test]
+#[should_panic]
+fn lexer_reports_numeric_errors() {
+    new_compile_context! {
+        let _frac = Fraction::new(5, 0);
+    }
+}
+
+#[test]
+#[should_panic]
+fn lexer_reports_invalid_division() {
+    new_compile_context! {
+        let frac = Number::fraction(5, 2);
+        let zero = Number::integer(0);
+        let _div = frac / zero;
+    }
+}
+
+#[test]
+fn lexer_reports_invalid_token_with_position() {
+    use symbolix_core::lexer::token::Token;
+    use symbolix_core::lexer::Lexer;
+
+    new_compile_context! {
+        let mut lexer = Lexer::new("foo bar _baz
+                    123qux");
+
+        let expected = vec![
+            Token::variable(String::from("foo")),
+            Token::variable(String::from("bar")),
+            Token::variable(String::from("_baz")),
+            Token::invalid("123qux"),
+        ];
+
+        assert_eq!(lexer.tokens(), expected);
+    }
 }

@@ -1,13 +1,14 @@
-use std::fmt;
-use std::fmt::Display;
 use crate::lexer::constant::Constant;
 use crate::lexer::symbol::Symbol;
+use std::fmt;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Constant(Constant),
     Symbol(Symbol),
     Variable(String),
+    Invalid(String),
 }
 
 impl Token {
@@ -22,6 +23,10 @@ impl Token {
     pub fn variable(variable: String) -> Token {
         Token::Variable(variable)
     }
+
+    pub fn invalid(error: &str) -> Token {
+        Token::Invalid(String::from(error))
+    }
 }
 
 impl Display for Token {
@@ -30,6 +35,7 @@ impl Display for Token {
             Token::Constant(c) => write!(f, "Constant({})", c),
             Token::Symbol(s) => write!(f, "Symbol({})", s),
             Token::Variable(v) => write!(f, "Variable({})", v),
+            Token::Invalid(i) => write!(f, "Invalid({})", i),
         }
     }
 }

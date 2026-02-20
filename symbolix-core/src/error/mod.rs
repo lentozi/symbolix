@@ -1,45 +1,59 @@
-use std::io;
-use std::num::ParseIntError;
-use thiserror::Error;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::error::io_error::IoError;
-use crate::error::other_error::OtherError;
-use crate::error::semantic_error::SemanticError;
-use crate::error::syntax_error::SyntaxError;
-use crate::error::type_error::TypeError;
-
-pub mod io_error;
-pub mod other_error;
-pub mod semantic_error;
-pub mod syntax_error;
-pub mod type_error;
+static NEXT_ERROR_ID: AtomicU32 = AtomicU32::new(1);
 
 #[derive(Debug, Clone)]
+pub struct ErrorExt {
+    error_id: u32,
+    error_kind: ErrorKind,
+    error_message: String,
+    is_fatal: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ErrorKind {
-    Io(IoError),
-    Syntax(SyntaxError),
-    Semantic(SemanticError),
-    Type(TypeError),
-    Other(OtherError),
+    Io,
+    Lexical,
+    Parse,
+    Semantic,
+    Syntax,
+    Type,
+    Other,
+    Unknown,
 }
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
+impl ErrorExt {
+    pub fn new(error_kind: ErrorKind, error_message: String, is_fatal: bool) -> Self {
+        let error_id = NEXT_ERROR_ID.fetch_add(1, Ordering::SeqCst);
+        ErrorExt {
+            error_id,
+            error_kind,
+            error_message,
+            is_fatal,
+        }
+    }
 
-    #[error("Parse int error: {0}")]
-    Parse(#[from] ParseIntError),
+    pub fn error_id(&self) -> u32 {
+        self.error_id
+    }
 
-    #[error("Semantic error: {0}")]
-    Semantic(#[from] SemanticError),
+    pub fn error_kind(&self) -> ErrorKind {
+        self.error_kind
+    }
 
-    #[error("Other error: {0}")]
-    Msg(String),
-}
+    pub fn error_message(&self) -> &str {
+        &self.error_message
+    }
 
-impl Error {
-    pub fn semantic_error(msg: &str) -> Self {
-        Error::Semantic(SemanticError::new(String::from(msg)))
+    pub fn is_fatal(&self) -> bool {
+        self.is_fatal
+    }
+
+    pub fn semantic_error(error_message: &str, is_fatal: bool) -> Self {
+        ErrorExt::new(ErrorKind::Semantic, String::from(error_message), is_fatal)
+    }
+
+    pub fn lexical_error(error_message: &str, is_fatal: bool) -> Self {
+        ErrorExt::new(ErrorKind::Lexical, String::from(error_message), is_fatal)
     }
 }

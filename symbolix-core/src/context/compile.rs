@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     context::symbol_table::SymbolTable,
+    error::ErrorExt,
     semantic::variable::{Variable, VariableType},
 };
 
@@ -17,12 +18,14 @@ pub enum ExprType {
 
 pub struct CompileContext {
     pub symbol_table: RwLock<SymbolTable>,
+    pub error_queue: RwLock<Vec<ErrorExt>>,
 }
 
 impl CompileContext {
     pub fn new() -> Self {
         Self {
             symbol_table: RwLock::new(SymbolTable::new()),
+            error_queue: RwLock::new(Vec::new()),
         }
     }
 
@@ -30,7 +33,8 @@ impl CompileContext {
         COMPILE_CONTEXT_STACK.with(|stack| {
             stack.borrow_mut().push(Arc::clone(ctx));
             let result = f(&*ctx);
-            stack.borrow_mut().pop();
+            let ctx = stack.borrow_mut().pop().unwrap();
+            ctx.print_errors();
             result
         })
     }
@@ -90,6 +94,23 @@ impl CompileContext {
     pub fn collect_all_variables(&self) -> Vec<Variable> {
         let table = self.symbol_table.read().expect("rwlock poisoned");
         table.collect_all()
+    }
+
+    pub fn push_error(&self, error: ErrorExt) {
+        if error.is_fatal() {
+            self.print_errors();
+            panic!("fatal error: {}", error.error_message());
+        } else {
+            let mut errors = self.error_queue.write().expect("rwlock poisoned");
+            errors.push(error.clone());
+        }
+    }
+
+    pub fn print_errors(&self) {
+        let errors = self.error_queue.read().expect("rwlock poisoned");
+        for error in errors.iter() {
+            println!("Error {}: {}", error.error_id(), error.error_message());
+        }
     }
 }
 

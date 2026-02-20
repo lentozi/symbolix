@@ -4,7 +4,7 @@ macro_rules! new_compile_context {
     { $($body:tt)* } => {{
         let mut ctx_arc = std::sync::Arc::new($crate::context::CompileContext::new());
 
-        CompileContext::push_current(&ctx_arc, |ctx| {
+        $crate::context::CompileContext::push_current(&ctx_arc, |ctx| {
             $($body)*
         })
     }};
@@ -34,6 +34,18 @@ macro_rules! new_var_scope {
             panic!("No current CompileContext found");
         }
     }}
+}
+
+/// 向编译上下文添加编译错误
+#[macro_export]
+macro_rules! push_compile_error {
+    ($($error:expr),+ $(,)?) => {{
+        if let Some(ctx) = $crate::context::CompileContext::current() {
+            $(ctx.push_error($error);)*
+        } else {
+            panic!("No current CompileContext found");
+        }
+    }};
 }
 
 #[macro_export]

@@ -1,6 +1,5 @@
 use proc_macro::TokenStream;
 use symbolix_core::{
-    context::compile::CompileContext,
     lexer::{symbol::Precedence, Lexer},
     new_compile_context,
     optimizer::optimize,
