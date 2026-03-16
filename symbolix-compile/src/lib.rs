@@ -18,6 +18,7 @@ use quote::quote;
 #[proc_macro]
 pub fn compile(input: TokenStream) -> TokenStream {
     new_compile_context! {
+        // 将输入转化为字符串
         let input_lit = parse_macro_input!(input as LitStr);
         let expr_str = input_lit.value();
 
@@ -39,7 +40,8 @@ pub fn compile(input: TokenStream) -> TokenStream {
         let var_types: Vec<_> = variables
             .iter()
             .map(|variable| match variable.var_type {
-                VariableType::Float | VariableType::Fraction | VariableType::Integer => quote! { f64 },
+                VariableType::Float | VariableType::Fraction => quote! { f64 },
+                VariableType::Integer => quote! { i32 },
                 VariableType::Boolean => quote! { bool },
                 _ => panic!("invalid variable type"),
             })

@@ -5,6 +5,12 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/symbolix-compile/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/symbolix-compile/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/symbolix-compile/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/symbolix-core/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/symbolix-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/symbolix-core/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
