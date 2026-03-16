@@ -14,47 +14,71 @@ use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::semantic_ir::SemanticExpression;
 use crate::semantic::variable::{Variable, VariableType};
 
-pub fn semantic_without_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression {
+pub struct Analyzer {
+    is_numeric: bool,
+}
+
+impl Analyzer {
+    pub fn new() -> Self {
+        Analyzer { is_numeric: true }
+    }
+
+    pub fn analyze_with_ctx(&mut self, expr: &Expression) -> SemanticExpression {
+        let semantic = semantic_with_ctx(expr, self.is_numeric);
+        self.is_numeric = match semantic {
+            SemanticExpression::Numeric(_) => true,
+            SemanticExpression::Logical(_) => false,
+        };
+
+        semantic
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        self.is_numeric
+    }
+}
+
+fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression {
     match expr {
         Expression::BinaryExpression(left, operation, right) => match operation {
             Symbol::Binary(Binary::Add) => {
-                let left = semantic_without_ctx(left, true);
-                let right = semantic_without_ctx(right, true);
+                let left = semantic_with_ctx(left, true);
+                let right = semantic_with_ctx(right, true);
                 left + right
             }
             Symbol::Binary(Binary::Subtract) => {
-                let left = semantic_without_ctx(left, true);
-                let right = semantic_without_ctx(right, true);
+                let left = semantic_with_ctx(left, true);
+                let right = semantic_with_ctx(right, true);
                 left - right
             }
             Symbol::Binary(Binary::Multiply) => {
-                let left = semantic_without_ctx(left, true);
-                let right = semantic_without_ctx(right, true);
+                let left = semantic_with_ctx(left, true);
+                let right = semantic_with_ctx(right, true);
                 left * right
             }
             Symbol::Binary(Binary::Divide) => {
-                let left = semantic_without_ctx(left, true);
-                let right = semantic_without_ctx(right, true);
+                let left = semantic_with_ctx(left, true);
+                let right = semantic_with_ctx(right, true);
                 left / right
             }
             Symbol::Binary(Binary::Power) => {
-                let left = semantic_without_ctx(left, true);
-                let right = semantic_without_ctx(right, true);
+                let left = semantic_with_ctx(left, true);
+                let right = semantic_with_ctx(right, true);
                 SemanticExpression::power(left, right)
             }
             Symbol::Binary(Binary::LogicAnd) => {
-                let left = semantic_without_ctx(left, false);
-                let right = semantic_without_ctx(right, false);
+                let left = semantic_with_ctx(left, false);
+                let right = semantic_with_ctx(right, false);
                 SemanticExpression::and(left, right)
             }
             Symbol::Binary(Binary::LogicOr) => {
-                let left = semantic_without_ctx(left, false);
-                let right = semantic_without_ctx(right, false);
+                let left = semantic_with_ctx(left, false);
+                let right = semantic_with_ctx(right, false);
                 SemanticExpression::or(left, right)
             }
             Symbol::Relation(_) => {
-                let left = semantic_without_ctx(left, true);
-                let right = semantic_without_ctx(right, true);
+                let left = semantic_with_ctx(left, true);
+                let right = semantic_with_ctx(right, true);
                 match (left, right) {
                     (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
                         SemanticExpression::Logical(LogicalExpression::relation(
@@ -76,6 +100,7 @@ pub fn semantic_without_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpr
         }
         Expression::Variable(v) => {
             let var_type: VariableType = if is_numeric {
+                // TODO 暂时将数值计算中缺少类型声明的变量声明为 f64
                 VariableType::Float
             } else {
                 VariableType::Boolean
@@ -91,9 +116,9 @@ pub fn semantic_without_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpr
             if symbol1 == &Symbol::Ternary(Ternary::Conditional)
                 && symbol2 == &Symbol::Ternary(Ternary::ConditionalElse)
             {
-                let otherwise_semantic = semantic_without_ctx(&*otherwise, true);
-                let then_semantic = semantic_without_ctx(&*then, true);
-                let cond_semantic = semantic_without_ctx(&*cond, false);
+                let otherwise_semantic = semantic_with_ctx(&*otherwise, true);
+                let then_semantic = semantic_with_ctx(&*then, true);
+                let cond_semantic = semantic_with_ctx(&*cond, false);
 
                 match (cond_semantic, then_semantic, otherwise_semantic) {
                     (
@@ -114,9 +139,9 @@ pub fn semantic_without_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpr
             }
         }
         Expression::UnaryExpression(symbol, expression) => match symbol {
-            Symbol::Unary(Unary::Plus) => semantic_without_ctx(expression, true),
+            Symbol::Unary(Unary::Plus) => semantic_with_ctx(expression, true),
             Symbol::Unary(Unary::Minus) => {
-                let expr_semantic = semantic_without_ctx(expression, true);
+                let expr_semantic = semantic_with_ctx(expression, true);
                 match expr_semantic {
                     SemanticExpression::Numeric(n) => {
                         SemanticExpression::Numeric(NumericExpression::negation(n))
@@ -125,7 +150,7 @@ pub fn semantic_without_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpr
                 }
             }
             Symbol::Unary(Unary::LogicNot) => {
-                let expr_semantic = semantic_without_ctx(expression, false);
+                let expr_semantic = semantic_with_ctx(expression, false);
                 match expr_semantic {
                     SemanticExpression::Logical(b) => {
                         SemanticExpression::Logical(LogicalExpression::not(b))
@@ -136,8 +161,8 @@ pub fn semantic_without_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpr
             _ => panic!("unexpected unary operator: {}", symbol),
         },
         Expression::Relation(left, relation, right) => {
-            let left = semantic_without_ctx(left, true);
-            let right = semantic_without_ctx(right, true);
+            let left = semantic_with_ctx(left, true);
+            let right = semantic_with_ctx(right, true);
             match (left, right) {
                 (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
                     SemanticExpression::Logical(LogicalExpression::relation(left, *relation, right))

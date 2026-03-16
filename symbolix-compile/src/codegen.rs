@@ -2,6 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use symbolix_core::lexer::symbol::{Relation, Symbol};
+use symbolix_core::semantic::Analyzer;
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
@@ -174,20 +175,20 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
 
 #[test]
 fn test_codegen_arithmetic() {
-    use symbolix_core::lexer::symbol::Precedence;
     use symbolix_core::lexer::Lexer;
+    use symbolix_core::parser::Parser;
+    use symbolix_core::semantic::Analyzer;
     use symbolix_core::optimizer::optimize;
     use symbolix_core::parser::expression::Expression;
-    use symbolix_core::parser::pratt_parsing;
-    use symbolix_core::semantic::semantic_without_ctx;
     use symbolix_core::semantic::variable::VariableType;
     use symbolix_core::{new_compile_context, with_compile_context};
 
     new_compile_context! {
-        let input = "-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0";
+        let input = "x == 50 ? 4 : 5";
         let mut lexer: Lexer = Lexer::new(input);
-        let expression: Expression = pratt_parsing(&mut lexer, Precedence::Lowest);
-        let mut semantic = semantic_without_ctx(&expression, true);
+        let expression: Expression = Parser::pratt(&mut lexer);
+        let mut analyzer = Analyzer::new();
+        let mut semantic = analyzer.analyze_with_ctx(&expression);
         optimize(&mut semantic);
         let code = codegen_semantic(&semantic);
         println!("{}", code);
@@ -201,6 +202,11 @@ fn test_codegen_arithmetic() {
             VariableType::Boolean => quote! { bool },
             _ => panic!("invalid variable type"),
         });
+        let return_type = if analyzer.is_numeric() {
+            quote! { f64 }
+        } else {
+            quote! { bool }
+        };
 
         let doc_comment = format!(
             "Compiled Formula\n\nArguments in order: ({})",
@@ -217,7 +223,7 @@ fn test_codegen_arithmetic() {
 
                 impl CompiledFormula {
                     #[doc = #doc_comment]
-                    pub fn calculate(&self, #(#var_names: #var_types),*) -> f64 {
+                    pub fn calculate(&self, #(#var_names: #var_types),*) -> #return_type {
                         #code
                     }
                 }

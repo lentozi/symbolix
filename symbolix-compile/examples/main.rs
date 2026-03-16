@@ -6,4 +6,7 @@ fn main() {
 
     let code = compile!("x + 1");
     println!("{}", code.calculate(5.0));
+
+    let code = compile!("x == 50 ? 4 : 5");
+    println!("{}", code.calculate(50.0))
 }

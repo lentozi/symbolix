@@ -56,7 +56,7 @@ impl Constant {
 }
 
 impl Fraction {
-    // 初始化
+    /// 初始化
     pub fn new(numerator: i64, denominator: i64) -> Fraction {
         if denominator == 0 {
             push_compile_error!(ErrorExt::semantic_error("分母不能为零", true));
@@ -69,36 +69,36 @@ impl Fraction {
         frac
     }
 
-    // 化简分数
+    /// 化简分数
     pub fn simplify(&mut self) {
         if self.numerator == 0 {
             self.denominator = 1;
             return;
         }
 
-        // 处理符号，保证分母为正
+        // /处理符号，保证分母为正
         if self.denominator < 0 {
             self.numerator = -self.numerator;
             return;
         }
 
-        // 求最大公约数并化简
+        /// 求最大公约数并化简
         let gcd = gcd(self.numerator.abs(), self.denominator.abs());
         self.numerator /= gcd;
         self.denominator /= gcd;
     }
 
-    // 转换为浮点数
+    /// 转换为浮点数
     pub fn to_float(&self) -> f64 {
         self.numerator as f64 / self.denominator as f64
     }
 
-    // 检查是否为整数
+    /// 检查是否为整数
     pub fn is_integer(&self) -> bool {
         self.denominator == 1
     }
 
-    // 转换为整数（如果可能）
+    /// 转换为整数（如果可能）
     pub fn to_integer(&self) -> Option<i64> {
         if self.is_integer() {
             Some(self.numerator)
@@ -128,22 +128,22 @@ fn lcm(a: i64, b: i64) -> i64 {
 }
 
 impl Number {
-    // 创建整数
+    /// 创建整数
     pub fn integer(value: i64) -> Number {
         Number::Integer(value)
     }
 
-    // 创建浮点数
+    /// 创建浮点数
     pub fn float(value: f64) -> Number {
         Number::Float(OrderedFloat(value))
     }
 
-    // 创建分数
+    /// 创建分数
     pub fn fraction(numerator: i64, denominator: i64) -> Number {
         Number::Fraction(Fraction::new(numerator, denominator))
     }
 
-    // 转换为浮点数
+    /// 转换为浮点数
     pub fn to_float(&self) -> f64 {
         match self {
             Number::Integer(i) => *i as f64,
@@ -152,7 +152,7 @@ impl Number {
         }
     }
 
-    // 尝试转换为整数
+    /// 尝试转换为整数
     pub fn to_integer(&self) -> Option<i64> {
         match self {
             Number::Integer(i) => Some(*i),
@@ -167,7 +167,7 @@ impl Number {
         }
     }
 
-    // 检查是否为零
+    /// 检查是否为零
     pub fn is_zero(&self) -> bool {
         match self {
             Number::Integer(i) => *i == 0,
@@ -176,7 +176,7 @@ impl Number {
         }
     }
 
-    // 检查是否为 1
+    /// 检查是否为 1
     pub fn is_one(&self) -> bool {
         match self {
             Number::Integer(i) => *i == 1,

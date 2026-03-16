@@ -6,7 +6,15 @@ use crate::lexer::token::Token;
 use crate::lexer::Lexer;
 use crate::parser::expression::Expression;
 
-pub fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
+pub struct Parser;
+
+impl Parser {
+    pub fn pratt(lexer: &mut Lexer) -> Expression {
+        pratt_parsing(lexer, Precedence::Lowest)
+    }
+}
+
+fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
     // nud
     let mut left_expr = match lexer.next_token() {
         Some(Token::Constant(c)) => Expression::constant(c),

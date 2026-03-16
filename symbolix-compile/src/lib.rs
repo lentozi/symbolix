@@ -1,10 +1,10 @@
 use proc_macro::TokenStream;
 use symbolix_core::{
-    lexer::{symbol::Precedence, Lexer},
+    lexer::Lexer,
+    parser::Parser,
     new_compile_context,
     optimizer::optimize,
-    parser::pratt_parsing,
-    semantic::{semantic_without_ctx, variable::VariableType},
+    semantic::variable::VariableType,
     with_compile_context,
 };
 use syn::{parse_macro_input, LitStr};
@@ -14,6 +14,7 @@ use crate::codegen::codegen_semantic;
 mod codegen;
 
 use quote::quote;
+use symbolix_core::semantic::Analyzer;
 
 #[proc_macro]
 pub fn compile(input: TokenStream) -> TokenStream {
@@ -23,8 +24,9 @@ pub fn compile(input: TokenStream) -> TokenStream {
         let expr_str = input_lit.value();
 
         let mut lexer = Lexer::new(&expr_str);
-        let expression = pratt_parsing(&mut lexer, Precedence::Lowest);
-        let mut semantic_expression = semantic_without_ctx(&expression, true);
+        let expression = Parser::pratt(&mut lexer);
+        let mut analyzer = Analyzer::new();
+        let mut semantic_expression = analyzer.analyze_with_ctx(&expression);
         optimize(&mut semantic_expression);
         let code = codegen_semantic(&semantic_expression);
 
@@ -47,6 +49,12 @@ pub fn compile(input: TokenStream) -> TokenStream {
             })
             .collect();
 
+        let return_type = if analyzer.is_numeric() {
+            quote! { f64 }
+        } else {
+            quote! { bool }
+        };
+
         let doc_comment = format!(
             "Compiled Formula\n\nArguments in order: ({})",
             variables
@@ -63,13 +71,13 @@ pub fn compile(input: TokenStream) -> TokenStream {
                 struct CompiledFormula;
 
                 impl CompiledFormula {
-                    pub fn calculate(&self, #(#var_names: #var_types),*) -> f64 {
+                    pub fn calculate(&self, #(#var_names: #var_types),*) -> #return_type {
                         #code
                     }
 
-                    pub fn to_closure(&self) -> Box<dyn Fn(#(#var_types),*) -> f64> {
+                    pub fn to_closure(&self) -> Box<dyn Fn(#(#var_types),*) -> #return_type> {
                         #[doc = #doc_comment]
-                        Box::new(|#(#var_names: #var_types),*| -> f64 {
+                        Box::new(|#(#var_names: #var_types),*| -> #return_type {
                             #code
                         })
                     }
