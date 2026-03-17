@@ -2,7 +2,6 @@ use crate::lexer::symbol::{Relation, Symbol};
 use crate::logical_bucket;
 use crate::semantic::bucket::LogicalBucket;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
-use crate::semantic::semantic_ir::SemanticExpression;
 use crate::semantic::variable::Variable;
 use std::fmt;
 use std::fmt::Formatter;
@@ -187,15 +186,6 @@ impl fmt::Display for LogicalExpression {
             } => {
                 write!(f, "({} {} {})", left, operator, right)
             }
-        }
-    }
-}
-
-impl SemanticExpression {
-    pub fn to_owned_tree(&self) -> OwnedTree {
-        match self {
-            SemanticExpression::Numeric(expr) => expr.to_owned_tree(),
-            SemanticExpression::Logical(expr) => expr.to_owned_tree(),
         }
     }
 }

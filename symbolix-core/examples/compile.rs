@@ -15,6 +15,5 @@ fn main() {
         let mut semantic_expression = Analyzer::new().analyze_with_ctx(&expression);
         optimize(&mut semantic_expression);
         println!("{}", semantic_expression);
-
     }
 }

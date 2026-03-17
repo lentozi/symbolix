@@ -13,6 +13,7 @@ use crate::{
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
+use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum SemanticExpression {
@@ -159,3 +160,13 @@ impl_expr_numeric_operation!(Div, div, division, i32, i64, f32, f64, u32, u64);
 
 impl_expr_logic_operation!(BitAnd, bitand, and, bool);
 impl_expr_logic_operation!(BitOr, bitor, or, bool);
+
+
+impl SemanticExpression {
+    pub fn to_owned_tree(&self) -> OwnedTree {
+        match self {
+            SemanticExpression::Numeric(expr) => expr.to_owned_tree(),
+            SemanticExpression::Logical(expr) => expr.to_owned_tree(),
+        }
+    }
+}
