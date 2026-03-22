@@ -9,11 +9,11 @@ pub mod symbol;
 pub mod token;
 mod tools;
 
+/// 词法分析器，支持流式输出 token 和输出 token 数组
 pub struct Lexer {
     remaining: String,
 }
 
-/// 词法分析器，支持流式输出 token 和输出 token 数组
 impl Lexer {
     /// 初始化词法分析器，输入为要进行词法分析的字符串
     pub fn new(input: &str) -> Self {

@@ -1,3 +1,5 @@
+//! 词法分析工具模块，提供了一些常用的词法分析工具函数。
+
 use crate::error::ErrorExt;
 use crate::lexer::constant::{Constant, Number};
 use crate::lexer::symbol::Symbol;
@@ -15,10 +17,12 @@ use nom::sequence::preceded;
 use nom::{IResult, Parser};
 use std::str::FromStr;
 
+/// 解析整数的工具函数，用于词法分析器内部使用。
 fn parse_integer_tool(input: &str) -> IResult<&str, i64> {
     i64(input)
 }
 
+/// 解析浮点数的工具函数，用于词法分析器内部使用。
 fn parse_float_tool(input: &str) -> IResult<&str, f64> {
     // 三种被认为是“浮点”的情况（都不包含纯整数）：
     // 1) 有小数点的形式（1.23 或 1. 或 1.0），可选指数
@@ -35,10 +39,12 @@ fn parse_float_tool(input: &str) -> IResult<&str, f64> {
     map_res(float_parser, |s: &str| f64::from_str(s)).parse(input)
 }
 
+/// 解析布尔值的工具函数，用于词法分析器内部使用。
 fn parse_boolean(input: &str) -> IResult<&str, bool> {
     alt((map(tag("true"), |_| true), map(tag("false"), |_| false))).parse(input)
 }
 
+/// 解析符号的工具函数，用于词法分析器内部使用。
 fn parse_symbol(input: &str) -> IResult<&str, Symbol> {
     alt((
         map(tag("+"), |_| Symbol::Binary(Binary::Add)),
@@ -66,6 +72,7 @@ fn parse_symbol(input: &str) -> IResult<&str, Symbol> {
     .parse(input)
 }
 
+/// 解析变量的工具函数，用于词法分析器内部使用。
 fn parse_variable(input: &str) -> IResult<&str, String> {
     let first_char = nom::character::complete::satisfy(|c| c.is_alphabetic() || c == '_');
     let rest_chars = take_while(|c: char| c.is_alphanumeric() || c == '_');
@@ -98,6 +105,7 @@ fn rest_starts_with_ident(rest: &str) -> bool {
         .map_or(false, |c| c.is_alphabetic() || c == '_')
 }
 
+/// 解析整数词法单元的工具函数，用于词法分析器内部使用。
 fn parse_integer_token(input: &str) -> IResult<&str, Token> {
     match parse_integer_tool(input) {
         Ok((rest, n)) => {
@@ -126,6 +134,7 @@ fn parse_integer_token(input: &str) -> IResult<&str, Token> {
     }
 }
 
+/// 解析浮点数词法单元的工具函数，用于词法分析器内部使用。
 pub fn parse_float_token(input: &str) -> IResult<&str, Token> {
     match parse_float_tool(input) {
         Ok((rest, n)) => {

@@ -1,5 +1,4 @@
-// 数字类型枚举
-
+/// 数字类型枚举
 use ordered_float::OrderedFloat;
 use std::fmt;
 use std::iter::{Product, Sum};
@@ -8,55 +7,119 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 use crate::error::ErrorExt;
 use crate::push_compile_error;
 
+/// 常数类型枚举
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Constant {
+    /// 数字常数
     Number(Number),
+    /// 布尔常数
     Boolean(bool),
 }
 
+/// 数字常数类型枚举
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum Number {
+    /// 整数
     Integer(i64),
+    /// 浮点数
     Float(OrderedFloat<f64>),
+    /// 分数
     Fraction(Fraction),
 }
 
-// 分数结构体
+/// 分数结构体
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Fraction {
-    pub numerator: i64,   // 分子
-    pub denominator: i64, // 分母
+    /// 分子
+    pub numerator: i64,
+    /// 分母
+    pub denominator: i64,
 }
 
 impl Constant {
     /// 创建一个数字常量
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use symbolix_core::lexer::constant::{Constant, Number};
+    ///
+    /// let num = Constant::number(Number::integer(42));
+    /// assert_eq!(num, Constant::Number(Number::Integer(42)));
+    /// ```
     pub fn number(num: Number) -> Constant {
         Constant::Number(num)
     }
 
-    /// 创建一个布尔常量
+    /// 便捷构造器，创建一个布尔常量
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use symbolix_core::lexer::constant::Constant;
+    ///
+    /// let val = Constant::boolean(true);
+    /// assert_eq!(val, Constant::Boolean(true));
+    /// ```
     pub fn boolean(boolean: bool) -> Constant {
         Constant::Boolean(boolean)
     }
 
     /// 便捷构造器，创建一个整数常量
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use symbolix_core::lexer::constant::Constant;
+    ///
+    /// let num = Constant::integer(42);
+    /// assert_eq!(num, Constant::Number(Number::Integer(42)));
+    /// ```
     pub fn integer(num: i64) -> Constant {
         Constant::Number(Number::Integer(num))
     }
 
     /// 便捷构造器，创建一个浮点数常量
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use symbolix_core::lexer::constant::Constant;
+    ///
+    /// let num = Constant::float(3.14);
+    /// assert_eq!(num, Constant::Number(Number::Float(OrderedFloat(3.14))));
+    /// ```
     pub fn float(num: f64) -> Constant {
         Constant::Number(Number::Float(OrderedFloat(num)))
     }
 
     /// 便捷构造器，创建一个分数常量
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use symbolix_core::lexer::constant::Constant;
+    ///
+    /// let num = Constant::fraction(1, 2);
+    /// assert_eq!(num, Constant::Number(Number::Fraction(Fraction::new(1, 2))));
+    /// ```
     pub fn fraction(numerator: i64, denominator: i64) -> Constant {
         Constant::Number(Number::Fraction(Fraction::new(numerator, denominator)))
     }
 }
 
 impl Fraction {
-    /// 初始化
+    /// 初始化分数结构体
+    ///
+    /// # 示例
+    ///
+    /// ```
+    /// use symbolix_core::lexer::constant::Fraction;
+    ///
+    /// let frac = Fraction::new(1, 2);
+    /// assert_eq!(frac.numerator, 1);
+    /// assert_eq!(frac.denominator, 2);
+    /// ```
     pub fn new(numerator: i64, denominator: i64) -> Fraction {
         if denominator == 0 {
             push_compile_error!(ErrorExt::semantic_error("分母不能为零", true));
@@ -76,13 +139,13 @@ impl Fraction {
             return;
         }
 
-        // /处理符号，保证分母为正
+        // 处理符号，保证分母为正
         if self.denominator < 0 {
             self.numerator = -self.numerator;
             return;
         }
 
-        /// 求最大公约数并化简
+        // 求最大公约数并化简
         let gcd = gcd(self.numerator.abs(), self.denominator.abs());
         self.numerator /= gcd;
         self.denominator /= gcd;
@@ -107,13 +170,13 @@ impl Fraction {
         }
     }
 
-    // 转换为 LateX
+    /// 转换为 LateX 输出格式
     pub fn to_latex(&self) -> String {
         format!("\\frac{{{}}}{{{}}}", self.numerator, self.denominator)
     }
 }
 
-// 求最大公约数
+/// 工具函数：求最大公约数
 fn gcd(a: i64, b: i64) -> i64 {
     if b == 0 {
         a
@@ -122,7 +185,7 @@ fn gcd(a: i64, b: i64) -> i64 {
     }
 }
 
-// 求最小公倍数
+/// 工具函数：求最小公倍数
 fn lcm(a: i64, b: i64) -> i64 {
     (a * b).abs() / gcd(a.abs(), b.abs())
 }
@@ -215,6 +278,7 @@ impl fmt::Display for Constant {
     }
 }
 
+/// 实现 Add 用于加法
 impl Add for Number {
     type Output = Number;
 
@@ -249,6 +313,7 @@ impl Add for Number {
     }
 }
 
+/// 实现 Sub 用于减法
 impl Sub for Number {
     type Output = Number;
 
@@ -277,6 +342,7 @@ impl Sub for Number {
     }
 }
 
+/// 实现 Mul 用于乘法
 impl Mul for Number {
     type Output = Number;
 
@@ -317,6 +383,7 @@ impl Mul for Number {
     }
 }
 
+/// 实现 Div 用于除法
 impl Div for Number {
     type Output = Number;
 
@@ -351,6 +418,7 @@ impl Div for Number {
     }
 }
 
+/// 实现 Neg 用于取负
 impl Neg for Number {
     type Output = Number;
 
@@ -365,18 +433,21 @@ impl Neg for Number {
     }
 }
 
+/// 迭代器累加
 impl Sum for Number {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Number::Integer(0), |a, b| a + b)
     }
 }
 
+/// 迭代器累乘
 impl Product for Number {
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Number::Integer(1), |a, b| a * b)
     }
 }
 
+/// 工具函数：两分数相加
 fn add_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     let common_denom = lcm(a.denominator, b.denominator);
     let num_a = a.numerator * (common_denom / a.denominator);
@@ -384,6 +455,7 @@ fn add_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     Fraction::new(num_a + num_b, common_denom)
 }
 
+/// 工具函数：两分数相减
 fn sub_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     let common_denom = lcm(a.denominator, b.denominator);
     let num_a = a.numerator * (common_denom / a.denominator);
@@ -391,6 +463,7 @@ fn sub_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     Fraction::new(num_a - num_b, common_denom)
 }
 
+/// 工具函数：两分数相除
 fn div_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     if b.numerator == 0 {
         push_compile_error!(ErrorExt::semantic_error("除以零错误", true));
@@ -400,12 +473,14 @@ fn div_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     frac
 }
 
+/// 工具函数：两分数相乘
 fn mul_fractions(a: &Fraction, b: &Fraction) -> Fraction {
     let mut frac = Fraction::new(a.numerator * b.numerator, a.denominator * b.denominator);
     frac.simplify();
     frac
 }
 
+/// 实现 PartialEq<i64> 用于比较 Number 和 i64 类型
 impl PartialEq<i64> for Number {
     fn eq(&self, other: &i64) -> bool {
         match self {
@@ -416,6 +491,7 @@ impl PartialEq<i64> for Number {
     }
 }
 
+/// 实现 PartialOrd<i64> 用于比较 Number 和 i64 类型
 impl PartialOrd<i64> for Number {
     fn partial_cmp(&self, other: &i64) -> Option<std::cmp::Ordering> {
         match self {
