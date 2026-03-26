@@ -14,6 +14,8 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
 use tree_drawer::tree::OwnedTree;
+use crate::lexer::symbol::{Relation, Symbol};
+use crate::equation::linear::LinearEquation;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum SemanticExpression {
@@ -140,6 +142,48 @@ impl SemanticExpression {
 
     pub fn one() -> SemanticExpression {
         SemanticExpression::Numeric(Constant(Number::Integer(1)))
+    }
+}
+
+impl SemanticExpression {
+    pub fn is_numeric(&self) -> bool {
+        match self {
+            SemanticExpression::Numeric(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_logical(&self) -> bool {
+        match self {
+            SemanticExpression::Logical(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_equation(&self) -> bool {
+        match self {
+            SemanticExpression::Logical(
+                LogicalExpression::Relation {operator: Symbol::Relation(Relation::Equal), .. }
+            ) => true,
+            _ => false,
+        }
+    }
+
+    pub fn to_linear(&self) -> Option<LinearEquation> {
+        match self {
+            SemanticExpression::Numeric(numeric) => {
+                match numeric {
+                    Constant(c) => {}
+                    NumericExpression::Variable(_) => {}
+                    NumericExpression::Negation(_) => {}
+                    NumericExpression::Addition(_) => {}
+                    NumericExpression::Multiplication(_) => {}
+                    NumericExpression::Power { .. } => {}
+                    NumericExpression::Piecewise { .. } => {}
+                }
+            }
+            _ => None
+        }
     }
 }
 

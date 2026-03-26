@@ -46,10 +46,12 @@ pub fn extract_addition_term(expr: NumericExpression) -> AdditionTerm {
             if bucket.contains_constant() {
                 let coef: Number = bucket.get_constants().into_iter().sum();
                 let bucket = bucket.without_constants();
-                AdditionTerm::new(
-                    coef,
-                    NumericExpression::Multiplication(bucket.without_constants()),
-                )
+                if bucket.len() == 1 {
+                    let expr = bucket.iter().next().unwrap();
+                    AdditionTerm::new(coef, expr)
+                } else {
+                    AdditionTerm::new(coef, NumericExpression::Multiplication(bucket))
+                }
             } else {
                 AdditionTerm::new(
                     Number::Integer(1),

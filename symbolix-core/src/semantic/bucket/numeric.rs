@@ -176,6 +176,11 @@ impl NumericBucket {
         }
     }
 
+    /// 去掉 expressions 并返回
+    pub fn remove_expressions(&mut self) -> Vec<NumericExpression> {
+        std::mem::take(&mut self.expressions)
+    }
+
     pub fn is_all_multiples(&self) -> bool {
         let all_multiple = self.expressions.iter().all(|e| match e {
             NumericExpression::Multiplication(_) => true,

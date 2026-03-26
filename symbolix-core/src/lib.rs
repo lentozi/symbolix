@@ -1,4 +1,5 @@
 pub mod context;
+pub mod equation;
 pub mod error;
 pub mod lexer;
 pub mod macros;

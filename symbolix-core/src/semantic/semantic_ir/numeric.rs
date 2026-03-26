@@ -1,4 +1,5 @@
 use crate::lexer::constant::Number;
+use crate::optimizer::flatten_numeric;
 use crate::semantic::bucket::NumericBucket;
 use crate::semantic::semantic_ir::LogicalExpression;
 use crate::semantic::variable::Variable;
@@ -307,25 +308,31 @@ impl NumericExpression {
     }
 
     pub fn power(base: NumericExpression, exponent: NumericExpression) -> NumericExpression {
-        match base {
-            NumericExpression::Power {
-                base: b,
-                exponent: e,
-            } => {
+        match (base, exponent) {
+            (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
+                NumericExpression::Constant(Number::float(c1.to_float().powf(c2.to_float())))
+            }
+            (
+                NumericExpression::Power {
+                    base: b,
+                    exponent: e,
+                },
+                exponent,
+            ) => {
                 let new_exponent = NumericExpression::multiplication(*e, exponent);
                 NumericExpression::Power {
                     base: b,
                     exponent: Box::new(new_exponent),
                 }
             }
-            NumericExpression::Multiplication(v) => {
+            (NumericExpression::Multiplication(v), exponent) => {
                 let new_factors: NumericBucket = v
                     .into_iter()
                     .map(|factor| NumericExpression::power(factor, exponent.clone()))
                     .collect();
                 NumericExpression::Multiplication(new_factors)
             }
-            _ => NumericExpression::Power {
+            (base, exponent) => NumericExpression::Power {
                 base: Box::new(base),
                 exponent: Box::new(exponent),
             },
@@ -366,6 +373,14 @@ impl NumericExpression {
             otherwise: otherwise.map(Box::new),
         }
     }
+
+    /// 展开表达式，对于数值表达式来说将表达式中的括号去掉，将嵌套的表达式展开。
+    pub fn flatten(self) -> Self {
+        flatten_numeric(self)
+    }
+
+    /// 规约表达式
+    pub fn factor(&mut self) {}
 }
 
 impl fmt::Display for NumericExpression {
