@@ -5,7 +5,7 @@ use std::iter::{Product, Sum};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::error::ErrorExt;
-use crate::push_compile_error;
+use crate::{impl_constant_binary_operation, impl_constant_unary_operation, impl_number_binary_operation, impl_number_unary_operation, push_compile_error};
 
 /// 常数类型枚举
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
@@ -106,7 +106,48 @@ impl Constant {
     pub fn fraction(numerator: i64, denominator: i64) -> Constant {
         Constant::Number(Number::Fraction(Fraction::new(numerator, denominator)))
     }
+
+    pub fn negation(&self) -> Constant {
+        match self {
+            Constant::Number(num) => Constant::Number(-num),
+            _ => panic!("negation occurs on non-number constant"),
+        }
+    }
+
+    pub fn addition(&self, other: &Constant) -> Constant {
+        match (self, other) {
+            (Constant::Number(num1), Constant::Number(num2)) => Constant::Number(num1 + num2),
+            _ => panic!("add occurs on non-number constant"),
+        }
+    }
+
+    pub fn subtraction(&self, other: &Constant) -> Constant {
+        match (self, other) {
+            (Constant::Number(num1), Constant::Number(num2)) => Constant::Number(num1 - num2),
+            _ => panic!("subtract occurs on non-number constant"),
+        }
+    }
+
+    pub fn multiplication(&self, other: &Constant) -> Constant {
+        match (self, other) {
+            (Constant::Number(num1), Constant::Number(num2)) => Constant::Number(num1 * num2),
+            _ => panic!("multiplication occurs on non-number constant"),
+        }
+    }
+
+    pub fn division(&self, other: &Constant) -> Constant {
+        match (self, other) {
+            (Constant::Number(num1), Constant::Number(num2)) => Constant::Number(num1 / num2),
+            _ => panic!("division occurs on non-number constant"),
+        }
+    }
 }
+
+impl_constant_unary_operation!(Neg, neg, negation);
+impl_constant_binary_operation!(Add, add, addition);
+impl_constant_binary_operation!(Sub, sub, subtraction);
+impl_constant_binary_operation!(Mul, mul, multiplication);
+impl_constant_binary_operation!(Div, div, division);
 
 impl Fraction {
     /// 初始化分数结构体
@@ -247,7 +288,143 @@ impl Number {
             Number::Fraction(frac) => frac.numerator == frac.denominator,
         }
     }
+
+    pub fn addition(number1: &Number, number2: &Number) -> Number {
+        match (number1, number2) {
+            (Number::Integer(i1), Number::Integer(i2)) => {
+                if let Some(result) = i1.checked_add(*i2) {
+                    Number::Integer(result)
+                } else {
+                    Number::Float(OrderedFloat(*i1 as f64 + *i2 as f64))
+                }
+            }
+            (Number::Integer(i1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(*i1 as f64 + f2.0))
+            }
+            (Number::Integer(i1), Number::Fraction(frac2)) => {
+                Number::Fraction(add_fractions(&Fraction::new(*i1, 1), &frac2))
+            }
+            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 + *i2 as f64),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 + f2),
+            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 + frac2.to_float()),
+            (Number::Fraction(frac1), Number::Integer(i2)) => {
+                Number::Fraction(add_fractions(&frac1, &Fraction::new(*i2, 1)))
+            }
+            (Number::Fraction(frac1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(frac1.to_float() + f2.0))
+            }
+            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
+                Number::Fraction(add_fractions(&frac1, &frac2))
+            }
+        }
+    }
+
+    pub fn subtraction(number1: &Number, number2: &Number) -> Number {
+        match (number1, number2) {
+            (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 - i2),
+            (Number::Integer(i1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(*i1 as f64 - f2.0))
+            }
+            (Number::Integer(i1), Number::Fraction(frac2)) => {
+                Number::Fraction(sub_fractions(&Fraction::new(*i1, 1), &frac2))
+            }
+            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 - *i2 as f64),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 - f2),
+            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 - frac2.to_float()),
+            (Number::Fraction(frac1), Number::Integer(i2)) => {
+                Number::Fraction(sub_fractions(&frac1, &Fraction::new(*i2, 1)))
+            }
+            (Number::Fraction(frac1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(frac1.to_float() - f2.0))
+            }
+            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
+                Number::Fraction(sub_fractions(&frac1, &frac2))
+            }
+        }
+    }
+
+    pub fn multiplication(number1: &Number, number2: &Number) -> Number {
+        match (number1, number2) {
+            (Number::Integer(i1), Number::Integer(i2)) => {
+                if let Some(result) = i1.checked_mul(*i2) {
+                    Number::Integer(result)
+                } else {
+                    Number::Float(OrderedFloat((i1 * i2) as f64))
+                }
+            }
+            (Number::Integer(i1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(*i1 as f64 * f2.0))
+            }
+            (Number::Integer(i1), Number::Fraction(frac2)) => {
+                let mut result = frac2.clone();
+                result.numerator *= i1;
+                result.simplify();
+                Number::Fraction(result)
+            }
+            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 * *i2 as f64),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 * f2),
+            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 * frac2.to_float()),
+            (Number::Fraction(frac1), Number::Integer(i2)) => {
+                let mut result = frac1.clone();
+                result.numerator *= i2;
+                result.simplify();
+                Number::Fraction(result)
+            }
+            (Number::Fraction(frac1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(frac1.to_float() * f2.0))
+            }
+            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
+                Number::Fraction(mul_fractions(&frac1, &frac2))
+            }
+        }
+    }
+
+    pub fn division(number1: &Number, number2: &Number) -> Number {
+        match (number1, number2) {
+            (Number::Integer(i1), Number::Integer(i2)) => {
+                if i1 % i2 == 0 {
+                    Number::Integer(i1 / i2)
+                } else {
+                    Number::Fraction(Fraction::new(*i1, *i2))
+                }
+            }
+            (Number::Integer(i1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(*i1 as f64 / f2.0))
+            }
+            (Number::Integer(i1), Number::Fraction(frac2)) => {
+                Number::Fraction(div_fractions(&Fraction::new(*i1, 1), &frac2))
+            }
+            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 / *i2 as f64),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 / f2),
+            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 / frac2.to_float()),
+            (Number::Fraction(frac1), Number::Integer(i2)) => {
+                Number::Fraction(div_fractions(&frac1, &Fraction::new(*i2, 1)))
+            }
+            (Number::Fraction(frac1), Number::Float(f2)) => {
+                Number::Float(OrderedFloat(frac1.to_float() / f2.0))
+            }
+            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
+                Number::Fraction(div_fractions(&frac1, &frac2))
+            }
+        }
+    }
+
+    pub fn negation(number: &Number) -> Number {
+        match number {
+            Number::Integer(i) => Number::Integer(-i),
+            Number::Float(f) => Number::Float(-f),
+            Number::Fraction(frac) => {
+                Number::Fraction(Fraction::new(-frac.numerator, frac.denominator))
+            }
+        }
+    }
 }
+
+impl_number_unary_operation!(Neg, neg, negation);
+impl_number_binary_operation!(Add, add, addition);
+impl_number_binary_operation!(Sub, sub, subtraction);
+impl_number_binary_operation!(Mul, mul, multiplication);
+impl_number_binary_operation!(Div, div, division);
 
 impl fmt::Display for Fraction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -278,164 +455,9 @@ impl fmt::Display for Constant {
     }
 }
 
-/// 实现 Add 用于加法
-impl Add for Number {
-    type Output = Number;
-
-    fn add(self, other: Number) -> Number {
-        match (self, other) {
-            (Number::Integer(i1), Number::Integer(i2)) => {
-                if let Some(result) = i1.checked_add(i2) {
-                    Number::Integer(result)
-                } else {
-                    Number::Float(OrderedFloat(i1 as f64 + i2 as f64))
-                }
-            }
-            (Number::Integer(i1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(i1 as f64 + f2.0))
-            }
-            (Number::Integer(i1), Number::Fraction(frac2)) => {
-                Number::Fraction(add_fractions(&Fraction::new(i1, 1), &frac2))
-            }
-            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 + i2 as f64),
-            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 + f2),
-            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 + frac2.to_float()),
-            (Number::Fraction(frac1), Number::Integer(i2)) => {
-                Number::Fraction(add_fractions(&frac1, &Fraction::new(i2, 1)))
-            }
-            (Number::Fraction(frac1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(frac1.to_float() + f2.0))
-            }
-            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
-                Number::Fraction(add_fractions(&frac1, &frac2))
-            }
-        }
-    }
-}
-
-/// 实现 Sub 用于减法
-impl Sub for Number {
-    type Output = Number;
-
-    fn sub(self, other: Number) -> Number {
-        match (self, other) {
-            (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 - i2),
-            (Number::Integer(i1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(i1 as f64 - f2.0))
-            }
-            (Number::Integer(i1), Number::Fraction(frac2)) => {
-                Number::Fraction(sub_fractions(&Fraction::new(i1, 1), &frac2))
-            }
-            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 - i2 as f64),
-            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 - f2),
-            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 - frac2.to_float()),
-            (Number::Fraction(frac1), Number::Integer(i2)) => {
-                Number::Fraction(sub_fractions(&frac1, &Fraction::new(i2, 1)))
-            }
-            (Number::Fraction(frac1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(frac1.to_float() - f2.0))
-            }
-            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
-                Number::Fraction(sub_fractions(&frac1, &frac2))
-            }
-        }
-    }
-}
-
-/// 实现 Mul 用于乘法
-impl Mul for Number {
-    type Output = Number;
-
-    fn mul(self, other: Number) -> Number {
-        match (self, other) {
-            (Number::Integer(i1), Number::Integer(i2)) => {
-                if let Some(result) = i1.checked_mul(i2) {
-                    Number::Integer(result)
-                } else {
-                    Number::Float(OrderedFloat(i1 as f64 * i2 as f64))
-                }
-            }
-            (Number::Integer(i1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(i1 as f64 * f2.0))
-            }
-            (Number::Integer(i1), Number::Fraction(frac2)) => {
-                let mut result = frac2.clone();
-                result.numerator *= i1;
-                result.simplify();
-                Number::Fraction(result)
-            }
-            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 * i2 as f64),
-            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 * f2),
-            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 * frac2.to_float()),
-            (Number::Fraction(frac1), Number::Integer(i2)) => {
-                let mut result = frac1.clone();
-                result.numerator *= i2;
-                result.simplify();
-                Number::Fraction(result)
-            }
-            (Number::Fraction(frac1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(frac1.to_float() * f2.0))
-            }
-            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
-                Number::Fraction(mul_fractions(&frac1, &frac2))
-            }
-        }
-    }
-}
-
-/// 实现 Div 用于除法
-impl Div for Number {
-    type Output = Number;
-
-    fn div(self, other: Number) -> Number {
-        match (self, other) {
-            (Number::Integer(i1), Number::Integer(i2)) => {
-                if i1 % i2 == 0 {
-                    Number::Integer(i1 / i2)
-                } else {
-                    Number::Fraction(Fraction::new(i1, i2))
-                }
-            }
-            (Number::Integer(i1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(i1 as f64 / f2.0))
-            }
-            (Number::Integer(i1), Number::Fraction(frac2)) => {
-                Number::Fraction(div_fractions(&Fraction::new(i1, 1), &frac2))
-            }
-            (Number::Float(f1), Number::Integer(i2)) => Number::Float(f1 / i2 as f64),
-            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 / f2),
-            (Number::Float(f1), Number::Fraction(frac2)) => Number::Float(f1 / frac2.to_float()),
-            (Number::Fraction(frac1), Number::Integer(i2)) => {
-                Number::Fraction(div_fractions(&frac1, &Fraction::new(i2, 1)))
-            }
-            (Number::Fraction(frac1), Number::Float(f2)) => {
-                Number::Float(OrderedFloat(frac1.to_float() / f2.0))
-            }
-            (Number::Fraction(frac1), Number::Fraction(frac2)) => {
-                Number::Fraction(div_fractions(&frac1, &frac2))
-            }
-        }
-    }
-}
-
-/// 实现 Neg 用于取负
-impl Neg for Number {
-    type Output = Number;
-
-    fn neg(self) -> Number {
-        match self {
-            Number::Integer(i) => Number::Integer(-i),
-            Number::Float(f) => Number::Float(-f),
-            Number::Fraction(frac) => {
-                Number::Fraction(Fraction::new(-frac.numerator, frac.denominator))
-            }
-        }
-    }
-}
-
 /// 迭代器累加
 impl Sum for Number {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Number {
         iter.fold(Number::Integer(0), |a, b| a + b)
     }
 }
