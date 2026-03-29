@@ -15,6 +15,6 @@ fn main() {
 
         let equation = Equation::new(semantic_expression);
         let result = equation.solve().unwrap();
-        println!("{}", result);
+        println!("x = {}", result);
     }
 }
