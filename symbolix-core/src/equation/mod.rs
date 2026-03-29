@@ -2,9 +2,7 @@ use crate::{
     equation::linear::LinearEquation,
     lexer::symbol::{Relation, Symbol},
     optimizer::optimize,
-    semantic::semantic_ir::{
-        logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
-    },
+    semantic::semantic_ir::{logic::LogicalExpression, SemanticExpression},
 };
 
 pub mod linear;
@@ -35,8 +33,7 @@ impl Equation {
             right,
         }) = raw
         {
-            let mut lhs =
-                SemanticExpression::numeric(NumericExpression::subtraction(*left, *right));
+            let mut lhs = SemanticExpression::numeric(left.as_ref() - right.as_ref());
             optimize(&mut lhs);
             // 判断方程类型
             if let SemanticExpression::Numeric(numeric) = lhs {

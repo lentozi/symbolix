@@ -40,9 +40,9 @@ impl LinearEquation {
     pub fn addition(linear1: &LinearEquation, linear2: &LinearEquation) -> Self {
         LinearEquation {
             // TODO 这里 multiply 进行了两次
-            _raw: NumericExpression::multiplication(linear1._raw, linear2._raw),
-            coef: linear1.coef + linear2.coef,
-            rhs: linear1.rhs + linear2.rhs,
+            _raw: &linear1._raw * &linear2._raw,
+            coef: &linear1.coef + &linear2.coef,
+            rhs: &linear1.rhs + &linear2.rhs,
         }
     }
 }

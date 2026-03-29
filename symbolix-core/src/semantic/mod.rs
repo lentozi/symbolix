@@ -64,17 +64,17 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
             Symbol::Binary(Binary::Power) => {
                 let left = semantic_with_ctx(left, true);
                 let right = semantic_with_ctx(right, true);
-                SemanticExpression::power(left, right)
+                SemanticExpression::power(&left, &right)
             }
             Symbol::Binary(Binary::LogicAnd) => {
                 let left = semantic_with_ctx(left, false);
                 let right = semantic_with_ctx(right, false);
-                SemanticExpression::and(left, right)
+                left & right
             }
             Symbol::Binary(Binary::LogicOr) => {
                 let left = semantic_with_ctx(left, false);
                 let right = semantic_with_ctx(right, false);
-                SemanticExpression::or(left, right)
+                left | right
             }
             Symbol::Relation(_) => {
                 let left = semantic_with_ctx(left, true);
@@ -82,7 +82,7 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
                 match (left, right) {
                     (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
                         SemanticExpression::Logical(LogicalExpression::relation(
-                            left, *operation, right,
+                            &left, operation, &right,
                         ))
                     }
                     _ => panic!("relation operator applied to non-numeric expressions"),
@@ -143,18 +143,14 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
             Symbol::Unary(Unary::Minus) => {
                 let expr_semantic = semantic_with_ctx(expression, true);
                 match expr_semantic {
-                    SemanticExpression::Numeric(n) => {
-                        SemanticExpression::Numeric(NumericExpression::negation(n))
-                    }
+                    SemanticExpression::Numeric(n) => SemanticExpression::Numeric(-n),
                     _ => panic!("invalid unary expression"),
                 }
             }
             Symbol::Unary(Unary::LogicNot) => {
                 let expr_semantic = semantic_with_ctx(expression, false);
                 match expr_semantic {
-                    SemanticExpression::Logical(b) => {
-                        SemanticExpression::Logical(LogicalExpression::not(b))
-                    }
+                    SemanticExpression::Logical(b) => SemanticExpression::Logical(!b),
                     _ => panic!("invalid unary expression"),
                 }
             }
@@ -165,7 +161,9 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
             let right = semantic_with_ctx(right, true);
             match (left, right) {
                 (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
-                    SemanticExpression::Logical(LogicalExpression::relation(left, *relation, right))
+                    SemanticExpression::Logical(LogicalExpression::relation(
+                        &left, relation, &right,
+                    ))
                 }
                 _ => panic!("relation operator applied to non-numeric expressions"),
             }

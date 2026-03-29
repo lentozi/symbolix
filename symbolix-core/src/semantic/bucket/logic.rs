@@ -45,10 +45,10 @@ impl LogicalBucket {
         }
     }
 
-    pub fn extend(&mut self, other: LogicalBucket) {
-        self.constants.extend(other.constants);
-        self.variables.extend(other.variables);
-        self.expressions.extend(other.expressions);
+    pub fn extend(&mut self, other: &LogicalBucket) {
+        self.constants.extend(other.constants.clone());
+        self.variables.extend(other.variables.clone());
+        self.expressions.extend(other.expressions.clone());
     }
 
     pub fn execute_constant(&mut self, op_and: bool) {

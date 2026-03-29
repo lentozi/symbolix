@@ -1,10 +1,11 @@
 use crate::lexer::symbol::{Relation, Symbol};
-use crate::logical_bucket;
 use crate::semantic::bucket::LogicalBucket;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::variable::Variable;
+use crate::{impl_logic_ir_binary_operation, impl_logic_ir_logic_operation, impl_logic_ir_unary_operation, logical_bucket};
 use std::fmt;
 use std::fmt::Formatter;
+use std::ops::{BitAnd, BitOr, Not};
 use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
@@ -30,23 +31,19 @@ impl LogicalExpression {
         LogicalExpression::Variable(variable)
     }
 
-    pub fn not(expr: LogicalExpression) -> LogicalExpression {
+    pub fn not(expr: &LogicalExpression) -> LogicalExpression {
         match expr {
             LogicalExpression::Constant(c) => LogicalExpression::Constant(!c),
-            LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr)),
-            LogicalExpression::Not(inner) => *inner,
+            LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr.clone())),
+            LogicalExpression::Not(inner) => *inner.clone(),
             LogicalExpression::And(v) => {
-                let negated_terms: LogicalBucket = v
-                    .into_iter()
-                    .map(|term| LogicalExpression::not(term))
-                    .collect();
+                let negated_terms: LogicalBucket =
+                    v.iter().map(|term| LogicalExpression::not(&term)).collect();
                 LogicalExpression::Or(negated_terms)
             }
             LogicalExpression::Or(v) => {
-                let negated_terms: LogicalBucket = v
-                    .into_iter()
-                    .map(|term| LogicalExpression::not(term))
-                    .collect();
+                let negated_terms: LogicalBucket =
+                    v.iter().map(|term| LogicalExpression::not(&term)).collect();
                 LogicalExpression::And(negated_terms)
             }
             LogicalExpression::Relation {
@@ -55,109 +52,119 @@ impl LogicalExpression {
                 right,
             } => match relation {
                 Symbol::Relation(Relation::Equal) => LogicalExpression::Relation {
-                    left,
+                    left: left.clone(),
                     operator: Symbol::Relation(Relation::NotEqual),
-                    right,
+                    right: right.clone(),
                 },
                 Symbol::Relation(Relation::NotEqual) => LogicalExpression::Relation {
-                    left,
+                    left: left.clone(),
                     operator: Symbol::Relation(Relation::Equal),
-                    right,
+                    right: right.clone(),
                 },
                 Symbol::Relation(Relation::LessThan) => LogicalExpression::Relation {
-                    left,
+                    left: left.clone(),
                     operator: Symbol::Relation(Relation::GreaterEqual),
-                    right,
+                    right: right.clone(),
                 },
                 Symbol::Relation(Relation::GreaterThan) => LogicalExpression::Relation {
-                    left,
+                    left: left.clone(),
                     operator: Symbol::Relation(Relation::LessEqual),
-                    right,
+                    right: right.clone(),
                 },
                 Symbol::Relation(Relation::LessEqual) => LogicalExpression::Relation {
-                    left,
+                    left: left.clone(),
                     operator: Symbol::Relation(Relation::GreaterThan),
-                    right,
+                    right: right.clone(),
                 },
                 Symbol::Relation(Relation::GreaterEqual) => LogicalExpression::Relation {
-                    left,
+                    left: left.clone(),
                     operator: Symbol::Relation(Relation::LessThan),
-                    right,
+                    right: right.clone(),
                 },
                 _ => panic!("unsupported relation operator: {}", relation),
             },
         }
     }
 
-    pub fn and(expr1: LogicalExpression, expr2: LogicalExpression) -> LogicalExpression {
+    pub fn and(expr1: &LogicalExpression, expr2: &LogicalExpression) -> LogicalExpression {
         match (expr1, expr2) {
             // 常量折叠
             (LogicalExpression::Constant(c1), LogicalExpression::Constant(c2)) => {
-                LogicalExpression::constant(c1 && c2)
+                LogicalExpression::constant(*c1 && *c2)
             }
             (_, LogicalExpression::Constant(false)) => LogicalExpression::Constant(false),
-            (l, LogicalExpression::Constant(true)) => l,
+            (l, LogicalExpression::Constant(true)) => l.clone(),
             // And + And
-            (LogicalExpression::And(mut v1), LogicalExpression::And(v2)) => {
-                v1.extend(v2);
-                LogicalExpression::And(v1)
+            (LogicalExpression::And(v1), LogicalExpression::And(v2)) => {
+                let mut combined = v1.clone();
+                combined.extend(v2);
+                LogicalExpression::And(combined)
             }
             // And + r
-            (LogicalExpression::And(mut v), r) => {
-                v.push(r);
-                LogicalExpression::And(v)
+            (LogicalExpression::And(v), r) => {
+                let mut combined = v.clone();
+                combined.push(r.clone());
+                LogicalExpression::And(combined)
             }
             // l + And
             (l, LogicalExpression::And(v)) => {
-                let mut combined = logical_bucket![l];
+                let mut combined = logical_bucket![l.clone()];
                 combined.extend(v);
                 LogicalExpression::And(combined)
             }
             // fallback
-            (l, r) => LogicalExpression::And(logical_bucket![l, r]),
+            (l, r) => LogicalExpression::And(logical_bucket![l.clone(), r.clone()]),
         }
     }
 
-    pub fn or(expr1: LogicalExpression, expr2: LogicalExpression) -> LogicalExpression {
+    pub fn or(expr1: &LogicalExpression, expr2: &LogicalExpression) -> LogicalExpression {
         match (expr1, expr2) {
             // 常量折叠
             (LogicalExpression::Constant(c1), LogicalExpression::Constant(c2)) => {
-                LogicalExpression::constant(c1 || c2)
+                LogicalExpression::constant(*c1 || *c2)
             }
             (_, LogicalExpression::Constant(true)) => LogicalExpression::Constant(true),
-            (l, LogicalExpression::Constant(false)) => l,
+            (l, LogicalExpression::Constant(false)) => l.clone(),
             // Or + Or
-            (LogicalExpression::Or(mut v1), LogicalExpression::Or(v2)) => {
-                v1.extend(v2);
-                LogicalExpression::Or(v1)
+            (LogicalExpression::Or(v1), LogicalExpression::Or(v2)) => {
+                let mut combined = v1.clone();
+                combined.extend(v2);
+                LogicalExpression::Or(combined)
             }
             // Or + r
-            (LogicalExpression::Or(mut v), r) => {
-                v.push(r);
-                LogicalExpression::Or(v)
+            (LogicalExpression::Or(v), r) => {
+                let mut combined = v.clone();
+                combined.push(r.clone());
+                LogicalExpression::Or(combined)
             }
             // l + Or
             (l, LogicalExpression::Or(v)) => {
-                let mut combined = logical_bucket![l];
+                let mut combined = logical_bucket![l.clone()];
                 combined.extend(v);
                 LogicalExpression::Or(combined)
             }
-            (l, r) => LogicalExpression::Or(logical_bucket![l, r]),
+            (l, r) => LogicalExpression::Or(logical_bucket![l.clone(), r.clone()]),
         }
     }
 
     pub fn relation(
-        left: NumericExpression,
-        operator: Symbol,
-        right: NumericExpression,
+        left: &NumericExpression,
+        operator: &Symbol,
+        right: &NumericExpression,
     ) -> LogicalExpression {
         LogicalExpression::Relation {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
+            left: Box::new(left.clone()),
+            operator: operator.clone(),
+            right: Box::new(right.clone()),
         }
     }
 }
+
+impl_logic_ir_unary_operation!(Not, not, not);
+impl_logic_ir_binary_operation!(BitAnd, bitand, and);
+impl_logic_ir_binary_operation!(BitOr, bitor, or);
+impl_logic_ir_logic_operation!(BitAnd, bitand, and, bool);
+impl_logic_ir_logic_operation!(BitOr, bitor, or, bool);
 
 impl fmt::Display for LogicalExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

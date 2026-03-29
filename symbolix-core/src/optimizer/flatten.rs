@@ -3,6 +3,7 @@ use crate::{
     semantic::{bucket::NumericBucket, semantic_ir::numeric::NumericExpression},
 };
 
+// TODO todo!
 pub fn flatten_numeric(expr: NumericExpression) -> NumericExpression {
     match expr {
         // 对于加法，直接展开加法的每一项即可
@@ -14,9 +15,8 @@ pub fn flatten_numeric(expr: NumericExpression) -> NumericExpression {
             NumericExpression::Addition(flattened_bucket)
         }
         // 对于乘法，将表达式中的每一项相乘并且相加，最后得到只包含一个 expression 的 bucket，再将常量、变量乘进表达式
-        NumericExpression::Multiplication(bucket) => {
+        NumericExpression::Multiplication(mut bucket) => {
             // TODO 这里必须克隆吗？
-            let mut bucket = bucket.clone();
             let mut expressions = bucket
                 .remove_expressions()
                 .into_iter()
@@ -30,24 +30,23 @@ pub fn flatten_numeric(expr: NumericExpression) -> NumericExpression {
                     expressions.pop().expect("failed pop from expressions");
 
                 for expr in expressions {
-                    flattened_expression =
-                        NumericExpression::multiplication(flattened_expression, expr);
+                    flattened_expression = flattened_expression * expr;
                 }
 
-                let mut flattened_bucket = numeric_bucket!(flattened_expression);
-                flattened_bucket.extend(bucket);
+                let mut flattened_bucket = numeric_bucket![flattened_expression];
+                flattened_bucket.extend(&bucket);
                 NumericExpression::Multiplication(flattened_bucket)
             } else if expressions.len() == 1 {
                 let the_only_expression = match expressions.pop() {
                     Some(expression) => expression,
                     None => panic!("failed to get the only expression"),
                 };
-                let mut flattened_bucket = numeric_bucket!(the_only_expression);
-                flattened_bucket.extend(bucket);
+                let mut flattened_bucket = numeric_bucket![the_only_expression];
+                flattened_bucket.extend(&bucket);
                 NumericExpression::Multiplication(flattened_bucket)
             } else {
-                let mut flattened_bucket = numeric_bucket!();
-                flattened_bucket.extend(bucket);
+                let mut flattened_bucket = numeric_bucket![];
+                flattened_bucket.extend(&bucket);
                 NumericExpression::Multiplication(flattened_bucket)
             }
         }

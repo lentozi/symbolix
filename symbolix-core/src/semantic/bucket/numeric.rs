@@ -68,10 +68,10 @@ impl NumericBucket {
         }
     }
 
-    pub fn extend(&mut self, other: NumericBucket) {
-        self.constants.extend(other.constants);
-        self.variables.extend(other.variables);
-        self.expressions.extend(other.expressions);
+    pub fn extend(&mut self, other: &NumericBucket) {
+        self.constants.extend(other.constants.clone());
+        self.variables.extend(other.variables.clone());
+        self.expressions.extend(other.expressions.clone());
     }
 
     pub fn execute_constant(&mut self, add: bool) {

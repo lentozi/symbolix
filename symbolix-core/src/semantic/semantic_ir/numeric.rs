@@ -3,9 +3,13 @@ use crate::optimizer::flatten_numeric;
 use crate::semantic::bucket::NumericBucket;
 use crate::semantic::semantic_ir::LogicalExpression;
 use crate::semantic::variable::Variable;
-use crate::{logical_bucket, numeric_bucket};
+use crate::{
+    impl_numeric_ir_binary_operation, impl_numeric_ir_numeric_operation,
+    impl_numeric_ir_unary_operation, logical_bucket, numeric_bucket,
+};
 use std::fmt;
 use std::fmt::Formatter;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
@@ -30,6 +34,7 @@ impl NumericExpression {
         NumericExpression::Constant(number)
     }
 
+    // 为类型建立统一 trait
     pub fn compatible_constant(number: f64) -> NumericExpression {
         NumericExpression::Constant(Number::float(number))
     }
@@ -38,30 +43,31 @@ impl NumericExpression {
         NumericExpression::Variable(variable)
     }
 
-    pub fn negation(expr: NumericExpression) -> NumericExpression {
+    pub fn negation(expr: &NumericExpression) -> NumericExpression {
         match expr {
             NumericExpression::Constant(n) => NumericExpression::Constant(-n),
-            NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr)),
-            NumericExpression::Negation(inner) => *inner,
+            NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr.clone())),
+            NumericExpression::Negation(inner) => *inner.clone(),
             NumericExpression::Addition(v) => {
                 let negated_terms: NumericBucket = v
-                    .into_iter()
-                    .map(|term| NumericExpression::negation(term))
+                    .iter()
+                    .map(|term| NumericExpression::negation(&term))
                     .collect();
                 NumericExpression::Addition(negated_terms)
             }
             NumericExpression::Multiplication(v) => NumericExpression::multiplication(
-                NumericExpression::Multiplication(v),
-                NumericExpression::Constant(Number::integer(-1)),
+                &NumericExpression::Multiplication(v.clone()),
+                &NumericExpression::Constant(Number::integer(-1)),
             ),
-            NumericExpression::Power { .. } => NumericExpression::Negation(Box::new(expr)),
+            NumericExpression::Power { .. } => NumericExpression::Negation(Box::new(expr.clone())),
             NumericExpression::Piecewise { cases, otherwise } => {
                 let new_cases: Vec<(LogicalExpression, NumericExpression)> = cases
                     .into_iter()
-                    .map(|(cond, num)| (cond, NumericExpression::negation(num)))
+                    .map(|(cond, num)| (cond.clone(), NumericExpression::negation(num)))
                     .collect();
-                let new_otherwise =
-                    otherwise.map(|boxed| Box::new(NumericExpression::negation(*boxed)));
+                let new_otherwise = otherwise
+                    .as_ref()
+                    .map(|boxed| Box::new(NumericExpression::negation(boxed.as_ref())));
                 NumericExpression::Piecewise {
                     cases: new_cases,
                     otherwise: new_otherwise,
@@ -70,7 +76,7 @@ impl NumericExpression {
         }
     }
 
-    pub fn addition(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
+    pub fn addition(term1: &NumericExpression, term2: &NumericExpression) -> NumericExpression {
         match (term1, term2) {
             (
                 NumericExpression::Piecewise {
@@ -85,33 +91,36 @@ impl NumericExpression {
                 let mut new_cases = Vec::new();
 
                 // 先算 otherwise × otherwise
-                let new_otherwise = match (&otherwise1, &otherwise2) {
+                let new_otherwise = match (otherwise1, otherwise2) {
                     (Some(o1), Some(o2)) => Some(Box::new(NumericExpression::addition(
-                        (**o1).clone(),
-                        (**o2).clone(),
+                        o1.as_ref(),
+                        o2.as_ref(),
                     ))),
                     _ => None,
                 };
 
                 // cases1 × cases2
-                for (cond1, num1) in cases1 {
-                    for (cond2, num2) in &cases2 {
+                for (cond1, num1) in cases1.iter() {
+                    for (cond2, num2) in cases2.iter() {
                         new_cases.push((
                             LogicalExpression::And(logical_bucket![cond1.clone(), cond2.clone()]),
-                            NumericExpression::addition(num1.clone(), num2.clone()),
+                            NumericExpression::addition(num1, num2),
                         ));
                     }
 
                     // cases1 × otherwise2
-                    if let Some(ref o2) = otherwise2 {
-                        new_cases.push((cond1, NumericExpression::addition(num1, (**o2).clone())));
+                    if let Some(o2) = otherwise2.as_ref() {
+                        new_cases.push((
+                            cond1.clone(),
+                            NumericExpression::addition(num1, o2.as_ref()),
+                        ));
                     }
                 }
 
                 // otherwise1 × cases2
-                if let Some(o1) = otherwise1 {
-                    for (cond2, num2) in cases2 {
-                        new_cases.push((cond2, NumericExpression::addition(*o1.clone(), num2)));
+                if let Some(o1) = otherwise1.as_ref() {
+                    for (cond2, num2) in cases2.iter() {
+                        new_cases.push((cond2.clone(), NumericExpression::addition(o1, num2)));
                     }
                 }
 
@@ -122,11 +131,13 @@ impl NumericExpression {
             }
             (NumericExpression::Piecewise { cases, otherwise }, r) => {
                 let new_cases = cases
-                    .into_iter()
-                    .map(|(cond, num)| (cond, NumericExpression::addition(num, r.clone())))
+                    .iter()
+                    .map(|(cond, num)| (cond.clone(), NumericExpression::addition(num, r)))
                     .collect();
 
-                let new_otherwise = otherwise.map(|o| Box::new(NumericExpression::addition(*o, r)));
+                let new_otherwise = otherwise
+                    .as_ref()
+                    .map(|o| Box::new(NumericExpression::addition(o.as_ref(), r)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -135,23 +146,26 @@ impl NumericExpression {
             }
             (l, NumericExpression::Piecewise { cases, otherwise }) => {
                 let new_cases = cases
-                    .into_iter()
-                    .map(|(cond, num)| (cond, NumericExpression::addition(l.clone(), num)))
+                    .iter()
+                    .map(|(cond, num)| (cond.clone(), NumericExpression::addition(l, num)))
                     .collect();
 
-                let new_otherwise = otherwise.map(|o| Box::new(NumericExpression::addition(l, *o)));
+                let new_otherwise = otherwise
+                    .as_ref()
+                    .map(|o| Box::new(NumericExpression::addition(l, o)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
                     otherwise: new_otherwise,
                 }
             }
-            (NumericExpression::Addition(mut v1), NumericExpression::Addition(v2)) => {
-                v1.extend(v2);
-                NumericExpression::Addition(v1)
+            (NumericExpression::Addition(v1), NumericExpression::Addition(v2)) => {
+                let mut new_bucket = v1.clone();
+                new_bucket.extend(v2);
+                NumericExpression::Addition(new_bucket)
             }
             (NumericExpression::Addition(v), NumericExpression::Constant(n)) => {
-                let mut combined = numeric_bucket![NumericExpression::Constant(n)];
+                let mut combined = numeric_bucket![NumericExpression::Constant(n.clone())];
                 combined.extend(v);
                 NumericExpression::Addition(combined)
             }
@@ -161,29 +175,37 @@ impl NumericExpression {
             }
             (l, NumericExpression::Constant(c2)) => {
                 // 常量放左侧
-                NumericExpression::Addition(numeric_bucket![NumericExpression::Constant(c2), l])
+                NumericExpression::Addition(numeric_bucket![
+                    NumericExpression::Constant(c2.clone()),
+                    l.clone()
+                ])
             }
-            (NumericExpression::Addition(mut v), r) => {
-                v.push(r);
-                NumericExpression::Addition(v)
+            (NumericExpression::Addition(v), r) => {
+                let mut new_bucket = numeric_bucket![r.clone()];
+                new_bucket.extend(v);
+                NumericExpression::Addition(new_bucket)
             }
             (l, NumericExpression::Addition(v)) => {
-                let mut combined = numeric_bucket![l];
+                let mut combined = numeric_bucket![l.clone()];
                 combined.extend(v);
                 NumericExpression::Addition(combined)
             }
-            (l, r) => NumericExpression::Addition(numeric_bucket![l, r]),
+            (l, r) => NumericExpression::Addition(numeric_bucket![l.clone(), r.clone()]),
         }
     }
 
     pub fn subtraction(
-        minuend: NumericExpression,
-        subtrahend: NumericExpression,
+        minuend: &NumericExpression,
+        subtrahend: &NumericExpression,
     ) -> NumericExpression {
-        NumericExpression::addition(minuend, NumericExpression::negation(subtrahend))
+        NumericExpression::addition(minuend, &NumericExpression::negation(subtrahend))
     }
 
-    pub fn multiplication(term1: NumericExpression, term2: NumericExpression) -> NumericExpression {
+    // TODO 优化，最小化克隆，考虑优化方向 `Rc<NumericExpression>`
+    pub fn multiplication(
+        term1: &NumericExpression,
+        term2: &NumericExpression,
+    ) -> NumericExpression {
         match (term1, term2) {
             (
                 NumericExpression::Piecewise {
@@ -198,38 +220,38 @@ impl NumericExpression {
                 let mut new_cases = Vec::new();
 
                 // 先计算 otherwise × otherwise（避免 moved value）
-                let new_otherwise = match (&otherwise1, &otherwise2) {
+                let new_otherwise = match (otherwise1.as_ref(), otherwise2.as_ref()) {
                     (Some(o1), Some(o2)) => Some(Box::new(NumericExpression::multiplication(
-                        (**o1).clone(),
-                        (**o2).clone(),
+                        o1.as_ref(),
+                        o2.as_ref(),
                     ))),
                     _ => None,
                 };
 
                 // cases1 × cases2
-                for (cond1, num1) in cases1 {
-                    for (cond2, num2) in &cases2 {
+                for (cond1, num1) in cases1.iter() {
+                    for (cond2, num2) in cases2 {
                         new_cases.push((
                             LogicalExpression::And(logical_bucket![cond1.clone(), cond2.clone()]),
-                            NumericExpression::multiplication(num1.clone(), num2.clone()),
+                            NumericExpression::multiplication(num1, num2),
                         ));
                     }
 
                     // cases1 × otherwise2
-                    if let Some(ref o2) = otherwise2 {
+                    if let Some(o2) = otherwise2.as_ref() {
                         new_cases.push((
-                            cond1,
-                            NumericExpression::multiplication(num1, (**o2).clone()),
+                            cond1.clone(),
+                            NumericExpression::multiplication(num1, o2.as_ref()),
                         ));
                     }
                 }
 
                 // otherwise1 × cases2
-                if let Some(o1) = otherwise1 {
+                if let Some(o1) = otherwise1.as_ref() {
                     for (cond2, num2) in cases2 {
                         new_cases.push((
-                            cond2,
-                            NumericExpression::multiplication((*o1).clone(), num2),
+                            cond2.clone(),
+                            NumericExpression::multiplication(o1.as_ref(), num2),
                         ));
                     }
                 }
@@ -241,12 +263,13 @@ impl NumericExpression {
             }
             (NumericExpression::Piecewise { cases, otherwise }, r) => {
                 let new_cases = cases
-                    .into_iter()
-                    .map(|(cond, num)| (cond, NumericExpression::multiplication(num, r.clone())))
+                    .iter()
+                    .map(|(cond, num)| (cond.clone(), NumericExpression::multiplication(num, r)))
                     .collect();
 
-                let new_otherwise =
-                    otherwise.map(|o| Box::new(NumericExpression::multiplication(*o, r)));
+                let new_otherwise = otherwise
+                    .as_ref()
+                    .map(|o| Box::new(NumericExpression::multiplication(o.as_ref(), r)));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
@@ -256,58 +279,63 @@ impl NumericExpression {
             (l, NumericExpression::Piecewise { cases, otherwise }) => {
                 let new_cases = cases
                     .into_iter()
-                    .map(|(cond, num)| (cond, NumericExpression::multiplication(l.clone(), num)))
+                    .map(|(cond, num)| (cond.clone(), NumericExpression::multiplication(l, num)))
                     .collect();
 
-                let new_otherwise =
-                    otherwise.map(|o| Box::new(NumericExpression::multiplication(l, *o)));
+                let new_otherwise = otherwise
+                    .as_ref()
+                    .map(|o| Box::new(NumericExpression::multiplication(l, o.as_ref())));
 
                 NumericExpression::Piecewise {
                     cases: new_cases,
                     otherwise: new_otherwise,
                 }
             }
-            (NumericExpression::Multiplication(mut v1), NumericExpression::Multiplication(v2)) => {
-                v1.extend(v2);
-                NumericExpression::Multiplication(v1)
+            (NumericExpression::Multiplication(v1), NumericExpression::Multiplication(v2)) => {
+                let mut new_bucket = v1.clone();
+                new_bucket.extend(v2);
+                NumericExpression::Multiplication(new_bucket)
             }
             (NumericExpression::Multiplication(v), NumericExpression::Constant(n)) => {
-                let mut combined = numeric_bucket![NumericExpression::Constant(n)];
-                combined.extend(v);
+                let mut combined = numeric_bucket![NumericExpression::Constant(n.clone())];
+                combined.extend(&v);
                 NumericExpression::Multiplication(combined)
             }
-            (NumericExpression::Multiplication(mut v), r) => {
-                v.push(r);
-                NumericExpression::Multiplication(v)
+            (NumericExpression::Multiplication(v), r) => {
+                let mut new_bucket = numeric_bucket![r.clone()];
+                new_bucket.extend(v);
+                NumericExpression::Multiplication(new_bucket)
             }
             (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
                 // 常量折叠
                 NumericExpression::Constant(c1 * c2)
             }
             (l, NumericExpression::Constant(c2)) => {
-                // 常量放左侧
                 NumericExpression::Multiplication(numeric_bucket![
-                    NumericExpression::Constant(c2),
-                    l
+                    NumericExpression::Constant(c2.clone()),
+                    l.clone()
                 ])
             }
             (l, NumericExpression::Multiplication(v)) => {
-                let mut combined = numeric_bucket![l];
+                let mut combined = numeric_bucket![l.clone()];
                 combined.extend(v);
                 NumericExpression::Multiplication(combined)
             }
-            (l, r) => NumericExpression::Multiplication(numeric_bucket![l, r]),
+            (l, r) => NumericExpression::Multiplication(numeric_bucket![l.clone(), r.clone()]),
         }
     }
 
-    pub fn division(dividend: NumericExpression, divisor: NumericExpression) -> NumericExpression {
+    pub fn division(
+        dividend: &NumericExpression,
+        divisor: &NumericExpression,
+    ) -> NumericExpression {
         NumericExpression::multiplication(
             dividend,
-            NumericExpression::power(divisor, NumericExpression::Constant(Number::integer(-1))),
+            &NumericExpression::power(divisor, &NumericExpression::Constant(Number::integer(-1))),
         )
     }
 
-    pub fn power(base: NumericExpression, exponent: NumericExpression) -> NumericExpression {
+    pub fn power(base: &NumericExpression, exponent: &NumericExpression) -> NumericExpression {
         match (base, exponent) {
             (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
                 NumericExpression::Constant(Number::float(c1.to_float().powf(c2.to_float())))
@@ -319,22 +347,22 @@ impl NumericExpression {
                 },
                 exponent,
             ) => {
-                let new_exponent = NumericExpression::multiplication(*e, exponent);
+                let new_exponent = NumericExpression::multiplication(e.as_ref(), exponent);
                 NumericExpression::Power {
-                    base: b,
+                    base: b.clone(),
                     exponent: Box::new(new_exponent),
                 }
             }
             (NumericExpression::Multiplication(v), exponent) => {
                 let new_factors: NumericBucket = v
-                    .into_iter()
-                    .map(|factor| NumericExpression::power(factor, exponent.clone()))
+                    .iter()
+                    .map(|factor| NumericExpression::power(&factor, exponent))
                     .collect();
                 NumericExpression::Multiplication(new_factors)
             }
             (base, exponent) => NumericExpression::Power {
-                base: Box::new(base),
-                exponent: Box::new(exponent),
+                base: Box::new(base.clone()),
+                exponent: Box::new(exponent.clone()),
             },
         }
     }
@@ -353,12 +381,11 @@ impl NumericExpression {
                     otherwise: inner_otherwise,
                 } => {
                     for (inner_cond, inner_num) in inner_cases {
-                        let combined_cond = LogicalExpression::and(cond.clone(), inner_cond);
+                        let combined_cond = &cond & &inner_cond;
                         flattened_cases.push((combined_cond, inner_num));
                     }
                     if let Some(inner_o) = inner_otherwise {
-                        let combined_cond =
-                            LogicalExpression::and(cond.clone(), LogicalExpression::constant(true));
+                        let combined_cond = &cond & true;
                         flattened_cases.push((combined_cond, *inner_o));
                     }
                 }
@@ -382,6 +409,16 @@ impl NumericExpression {
     /// 规约表达式
     pub fn factor(&mut self) {}
 }
+
+impl_numeric_ir_unary_operation!(Neg, neg, negation);
+impl_numeric_ir_binary_operation!(Add, add, addition);
+impl_numeric_ir_binary_operation!(Sub, sub, subtraction);
+impl_numeric_ir_binary_operation!(Mul, mul, multiplication);
+impl_numeric_ir_binary_operation!(Div, div, division);
+impl_numeric_ir_numeric_operation!(Add, add, addition, i32, i64, f32, f64, u32, u64);
+impl_numeric_ir_numeric_operation!(Sub, sub, subtraction, i32, i64, f32, f64, u32, u64);
+impl_numeric_ir_numeric_operation!(Mul, mul, multiplication, i32, i64, f32, f64, u32, u64);
+impl_numeric_ir_numeric_operation!(Div, div, division, i32, i64, f32, f64, u32, u64);
 
 impl fmt::Display for NumericExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
