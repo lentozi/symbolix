@@ -5,10 +5,13 @@ use crate::{
 };
 
 pub mod constant;
+mod macros;
+mod number_trait;
 pub mod symbol;
 pub mod token;
 mod tools;
-mod macros;
+
+pub use number_trait::NumberTrait;
 
 /// 词法分析器，支持流式输出 token 和输出 token 数组
 pub struct Lexer {

@@ -1,4 +1,5 @@
 use crate::lexer::constant::Number;
+use crate::lexer::NumberTrait;
 use crate::optimizer::flatten_numeric;
 use crate::semantic::bucket::NumericBucket;
 use crate::semantic::semantic_ir::LogicalExpression;
@@ -35,8 +36,8 @@ impl NumericExpression {
     }
 
     // 为类型建立统一 trait
-    pub fn compatible_constant(number: f64) -> NumericExpression {
-        NumericExpression::Constant(Number::float(number))
+    pub fn compatible_constant(number: impl NumberTrait) -> NumericExpression {
+        NumericExpression::Constant(Number::common_build(number))
     }
 
     pub fn variable(variable: Variable) -> NumericExpression {

@@ -5,7 +5,11 @@ use std::iter::{Product, Sum};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::error::ErrorExt;
-use crate::{impl_constant_binary_operation, impl_constant_unary_operation, impl_number_binary_operation, impl_number_unary_operation, push_compile_error};
+use crate::lexer::number_trait::NumberTrait;
+use crate::{
+    impl_constant_binary_operation, impl_constant_unary_operation, impl_number_binary_operation,
+    impl_number_unary_operation, push_compile_error,
+};
 
 /// 常数类型枚举
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
@@ -245,6 +249,14 @@ impl Number {
     /// 创建分数
     pub fn fraction(numerator: i64, denominator: i64) -> Number {
         Number::Fraction(Fraction::new(numerator, denominator))
+    }
+
+    pub fn common_build(value: impl NumberTrait) -> Number {
+        if value.is_integer() {
+            Number::Integer(value.to_integer())
+        } else {
+            Number::Float(OrderedFloat(value.to_float()))
+        }
     }
 
     /// 转换为浮点数

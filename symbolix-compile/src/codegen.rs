@@ -2,7 +2,6 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use symbolix_core::lexer::symbol::{Relation, Symbol};
-use symbolix_core::semantic::Analyzer;
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
@@ -176,11 +175,11 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
 #[test]
 fn test_codegen_arithmetic() {
     use symbolix_core::lexer::Lexer;
-    use symbolix_core::parser::Parser;
-    use symbolix_core::semantic::Analyzer;
     use symbolix_core::optimizer::optimize;
     use symbolix_core::parser::expression::Expression;
+    use symbolix_core::parser::Parser;
     use symbolix_core::semantic::variable::VariableType;
+    use symbolix_core::semantic::Analyzer;
     use symbolix_core::{new_compile_context, with_compile_context};
 
     new_compile_context! {
