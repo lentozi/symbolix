@@ -13,6 +13,7 @@ use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::semantic_ir::SemanticExpression;
 use crate::semantic::variable::{Variable, VariableType};
+use crate::with_compile_context;
 
 pub struct Analyzer {
     is_numeric: bool,
@@ -99,13 +100,22 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
             SemanticExpression::Logical(LogicalExpression::constant(b))
         }
         Expression::Variable(v) => {
-            let var_type: VariableType = if is_numeric {
-                // TODO 暂时将数值计算中缺少类型声明的变量声明为 f64
-                VariableType::Float
-            } else {
-                VariableType::Boolean
+
+
+            // 判断上下文中是否已经注册
+            let variable = match with_compile_context!(ctx, ctx.search_variable(v)) {
+                Some(variable) => variable,
+                None => {
+                    let var_type: VariableType = if is_numeric {
+                        // TODO 暂时将数值计算中缺少类型声明的变量声明为 f64
+                        VariableType::Float
+                    } else {
+                        VariableType::Boolean
+                    };
+                    Variable::new(v.as_str(), var_type, None)
+                }
             };
-            let variable = Variable::new(v.as_str(), var_type, None);
+
             if is_numeric {
                 SemanticExpression::Numeric(NumericExpression::variable(variable))
             } else {

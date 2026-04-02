@@ -1,17 +1,26 @@
+use std::collections::HashMap;
+
 use proc_macro::TokenStream;
 use symbolix_core::{
     lexer::Lexer,
-    parser::Parser,
     new_compile_context,
     optimizer::optimize,
-    semantic::variable::VariableType,
+    parser::Parser,
+    semantic::{
+        semantic_ir::SemanticExpression,
+        variable::{Variable, VariableType},
+    },
     with_compile_context,
 };
 use syn::{parse_macro_input, LitStr};
 
-use crate::codegen::codegen_semantic;
+use crate::{
+    codegen::codegen_semantic,
+    rust_expr::{convert_expr, convert_expr_},
+};
 
 mod codegen;
+mod rust_expr;
 
 use quote::quote;
 use symbolix_core::semantic::Analyzer;
@@ -88,5 +97,62 @@ pub fn compile(input: TokenStream) -> TokenStream {
         };
 
         expanded.into()
+    }
+}
+
+/// 规范一下宏里面的内容
+/// 1. 变量定义：var!("var_name")
+/// 2. 表达式定义：expr!("expr")
+/// 3. 表达式调用方法创建关系：greater_than、less_than、equals、not_equals、greater_equal、less_equal
+/// 4. 表达式运算
+/// 5. 方程求解创建表达式
+/// 6. if 分支语句
+/// 7. 只有表达式或变量可以作为返回值，必须有返回值，返回值可以是元组
+#[proc_macro]
+pub fn symbolix_rust(input: TokenStream) -> TokenStream {
+    new_compile_context! {
+
+        let input: proc_macro2::TokenStream = input.into();
+
+        let wrapped = quote::quote!({
+            #input
+        });
+
+        let block: syn::Block = syn::parse2(wrapped).unwrap();
+
+        // 创建变量表和表达式表
+        let mut expr_table: HashMap<String, SemanticExpression> = HashMap::new();
+
+        for stmt in &block.stmts {
+            // println!("{:#?}", stmt);
+            match stmt {
+                // let 赋值
+                syn::Stmt::Local(local) => {
+                    // println!("{:#?}", local);
+                    let pat = local.pat.clone();
+
+                    let var_name = match &pat {
+                        syn::Pat::Ident(ident) => ident.ident.to_string(),
+                        _ => panic!("invalid pat"),
+                    };
+
+                    // expr 是等号右侧的元数据
+                    let expr_token = local.init.as_ref().unwrap().clone();
+
+                    // 右侧可能出现的：宏调用、方法调用、二元表达式
+                    let expr = convert_expr(expr_token.expr.as_ref(), &mut expr_table);
+                    // convert_expr(expr.expr.as_ref(), &mut expr_table);
+                    // println!("{:#?}", expr);
+
+                    expr_table.insert(var_name, expr);
+                }
+                syn::Stmt::Item(_) => unreachable!(),
+                // expr 只能作为返回值出现
+                syn::Stmt::Expr(expr, semi) => println!("expression: {:#?}, {:#?}", expr, semi),
+                _ => {}
+            }
+        }
+
+        TokenStream::new()
     }
 }

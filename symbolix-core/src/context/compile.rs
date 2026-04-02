@@ -86,6 +86,15 @@ impl CompileContext {
         }
     }
 
+    pub fn search_variable(&self, variable_name: &str) -> Option<Variable> {
+        let table = self.symbol_table.write().expect("rwlock poisoned");
+        if let Some(existing) = table.get(variable_name) {
+            Some(existing.clone())
+        } else {
+            None
+        }
+    }
+
     pub fn collect_variables(&self) -> Vec<Variable> {
         let table = self.symbol_table.read().expect("rwlock poisoned");
         table.collect()
