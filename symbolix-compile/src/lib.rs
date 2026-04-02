@@ -12,7 +12,7 @@ use symbolix_core::{
     },
     with_compile_context,
 };
-use syn::{parse_macro_input, LitStr};
+use syn::{parse_macro_input, Expr, LitStr};
 
 use crate::{
     codegen::codegen_semantic,
@@ -22,8 +22,9 @@ use crate::{
 mod codegen;
 mod rust_expr;
 
-use quote::quote;
+use quote::{format_ident, quote};
 use symbolix_core::semantic::Analyzer;
+use crate::codegen::{get_func_arguments, get_func_return_type};
 
 #[proc_macro]
 pub fn compile(input: TokenStream) -> TokenStream {
@@ -39,36 +40,14 @@ pub fn compile(input: TokenStream) -> TokenStream {
         optimize(&mut semantic_expression);
         let code = codegen_semantic(&semantic_expression);
 
-        // 获取上下文中的变量
-        let mut variables = with_compile_context!(ctx, ctx.collect_variables());
-        variables.sort_by(|a, b| a.name.cmp(&b.name));
-
-        let var_names: Vec<_> = variables
-            .iter()
-            .map(|variable| syn::Ident::new(&variable.name, proc_macro2::Span::call_site()))
-            .collect();
-
-        let var_types: Vec<_> = variables
-            .iter()
-            .map(|variable| match variable.var_type {
-                VariableType::Float | VariableType::Fraction => quote! { f64 },
-                VariableType::Integer => quote! { i32 },
-                VariableType::Boolean => quote! { bool },
-                _ => panic!("invalid variable type"),
-            })
-            .collect();
-
-        let return_type = if analyzer.is_numeric() {
-            quote! { f64 }
-        } else {
-            quote! { bool }
-        };
+        let (var_names, var_types) = get_func_arguments();
+        let return_type = get_func_return_type(&semantic_expression);
 
         let doc_comment = format!(
             "Compiled Formula\n\nArguments in order: ({})",
-            variables
+            var_names
                 .iter()
-                .map(|v| v.name.as_str())
+                .map(|v| v.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -141,18 +120,102 @@ pub fn symbolix_rust(input: TokenStream) -> TokenStream {
 
                     // 右侧可能出现的：宏调用、方法调用、二元表达式
                     let expr = convert_expr(expr_token.expr.as_ref(), &mut expr_table);
-                    // convert_expr(expr.expr.as_ref(), &mut expr_table);
-                    // println!("{:#?}", expr);
 
                     expr_table.insert(var_name, expr);
                 }
                 syn::Stmt::Item(_) => unreachable!(),
-                // expr 只能作为返回值出现
-                syn::Stmt::Expr(expr, semi) => println!("expression: {:#?}, {:#?}", expr, semi),
+                // expr 只能作为返回值出现，可能是普通表达式，可能是元组
+                syn::Stmt::Expr(expr, semi) => {
+                    if semi.is_some() {
+                        panic!("unexpected ';'");
+                    }
+
+                    let (code, return_type): (proc_macro2::TokenStream, proc_macro2::TokenStream) = match expr {
+                        Expr::Tuple(tuple_expr) => {
+                            let expr_list = tuple_expr.elems.iter().map(|x| {
+                                convert_expr(x, &mut expr_table)
+                            }).collect::<Vec<_>>();
+
+                            let code_list = expr_list.iter().map(codegen_semantic).collect::<Vec<_>>();
+
+                            let return_name_list = tuple_expr.elems.iter().enumerate().map(|(i, x)| {
+                                match x {
+                                    Expr::Path(path) => path.path.get_ident().unwrap().clone(),
+                                    _ => format_ident!("_{}", i),
+                                }
+                            }).collect::<Vec<_>>();
+
+                            let lets = return_name_list.iter().zip(code_list.iter()).map(|(name, code)| {
+                                quote! {
+                                    let #name = #code;
+                                }
+                            });
+
+                            let code = quote! {
+                                #(#lets)*
+
+                                (#(#return_name_list),*)
+                            };
+
+                            let return_types = expr_list.iter().map(get_func_return_type).collect::<Vec<_>>();
+
+                            let return_type = quote! {
+                                ( #(#return_types),* )
+                            };
+
+                            (code, return_type)
+                        }
+                        _ => {
+                            let expr = convert_expr(expr, &mut expr_table);
+                            let code = codegen_semantic(&expr);
+
+                            let return_type = get_func_return_type(&expr);
+
+                            (code, return_type)
+                        }
+                    };
+
+                    let (var_names, var_types) = get_func_arguments();
+
+                    let doc_comment = format!(
+                        "Compiled Formula\n\nArguments in order: ({})",
+                        var_names
+                            .iter()
+                            .map(|v| v.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+
+                    let expanded = quote! {
+                        {
+                            #[derive(Clone, Copy)]
+                            #[doc = #doc_comment]
+                            struct CompiledFormula;
+
+                            impl CompiledFormula {
+                                pub fn calculate(&self, #(#var_names: #var_types),*) -> #return_type {
+                                    #code
+                                }
+
+                                pub fn to_closure(&self) -> Box<dyn Fn(#(#var_types),*) -> #return_type> {
+                                    #[doc = #doc_comment]
+                                    Box::new(|#(#var_names: #var_types),*| -> #return_type {
+                                        #code
+                                    })
+                                }
+                            }
+
+                            CompiledFormula
+                        }
+                    };
+
+                    return expanded.into();
+                },
                 _ => {}
             }
         }
 
-        TokenStream::new()
+        panic!("need return values");
+
     }
 }

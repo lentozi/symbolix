@@ -1,8 +1,8 @@
 use symbolix_compile::symbolix_rust;
 
 fn main() {
-    symbolix_rust! {
-        let y = var!("hello", i32);
+    let code = symbolix_rust! {
+        let y = var!("hello", f64);
 
 
         // z = var!("z", i32);
@@ -15,6 +15,8 @@ fn main() {
 
         let result = equation.solve();
 
-        (result, x)
+        (result, y)
     };
+
+    println!("{}", code.calculate(10.0).0);
 }

@@ -1,10 +1,44 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, Ident};
 use quote::{format_ident, quote};
 
 use symbolix_core::lexer::symbol::{Relation, Symbol};
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
+use symbolix_core::semantic::variable::VariableType;
+use symbolix_core::with_compile_context;
+
+pub fn get_func_arguments() -> (Vec<Ident>, Vec<TokenStream>) {
+    // 获取上下文中的变量
+    let mut variables = with_compile_context!(ctx, ctx.collect_variables());
+    variables.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let var_names: Vec<_> = variables
+        .iter()
+        .map(|variable| syn::Ident::new(&variable.name, proc_macro2::Span::call_site()))
+        .collect();
+
+    let var_types: Vec<_> = variables
+        .iter()
+        .map(|variable| match variable.var_type {
+            VariableType::Float | VariableType::Fraction => quote! { f64 },
+            VariableType::Integer => quote! { i32 },
+            VariableType::Boolean => quote! { bool },
+            _ => panic!("invalid variable type"),
+        })
+        .collect();
+
+    (var_names, var_types)
+}
+
+pub fn get_func_return_type(expr: &SemanticExpression) -> TokenStream {
+    // TODO 这里暂时直接返回 f64
+    if expr.is_numeric() {
+        quote! { f64 }
+    } else {
+        quote! { bool }
+    }
+}
 
 pub fn codegen_semantic(expr: &SemanticExpression) -> TokenStream {
     match expr {
