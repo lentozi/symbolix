@@ -2,29 +2,19 @@ use std::collections::HashMap;
 
 use proc_macro::TokenStream;
 use symbolix_core::{
-    lexer::Lexer,
-    new_compile_context,
-    optimizer::optimize,
-    parser::Parser,
-    semantic::{
-        semantic_ir::SemanticExpression,
-        variable::{Variable, VariableType},
-    },
-    with_compile_context,
+    lexer::Lexer, new_compile_context, optimizer::optimize, parser::Parser,
+    semantic::semantic_ir::SemanticExpression,
 };
 use syn::{parse_macro_input, Expr, LitStr};
 
-use crate::{
-    codegen::codegen_semantic,
-    rust_expr::{convert_expr, convert_expr_},
-};
+use crate::{codegen::codegen_semantic, rust_expr::convert_expr};
 
 mod codegen;
 mod rust_expr;
 
+use crate::codegen::{get_func_arguments, get_func_return_type};
 use quote::{format_ident, quote};
 use symbolix_core::semantic::Analyzer;
-use crate::codegen::{get_func_arguments, get_func_return_type};
 
 #[proc_macro]
 pub fn compile(input: TokenStream) -> TokenStream {

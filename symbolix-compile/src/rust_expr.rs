@@ -6,7 +6,7 @@ use symbolix_core::semantic::semantic_ir::numeric::NumericExpression;
 use symbolix_core::semantic::semantic_ir::SemanticExpression;
 use symbolix_core::semantic::variable::VariableType;
 use symbolix_core::semantic::Analyzer;
-use symbolix_core::{new_compile_context, var};
+use symbolix_core::var;
 use syn::parse::{Parse, ParseStream};
 use syn::{BinOp, Expr, LitStr, Token, UnOp};
 
@@ -118,7 +118,11 @@ pub fn convert_expr(
             if receiver_ir.is_equation() {
                 // solve 方法
                 if args.len() != 0 {
-                    panic!("method call {} expects 0 argument, got {}", method_name, args.len());
+                    panic!(
+                        "method call {} expects 0 argument, got {}",
+                        method_name,
+                        args.len()
+                    );
                 }
 
                 match method_name.as_str() {
@@ -155,26 +159,34 @@ pub fn convert_expr(
                                 &Symbol::Relation(Relation::Equal),
                                 arg,
                             )),
-                            "not_equal_to" => SemanticExpression::logical(LogicalExpression::relation(
-                                receiver,
-                                &Symbol::Relation(Relation::NotEqual),
-                                arg,
-                            )),
-                            "less_than" => SemanticExpression::logical(LogicalExpression::relation(
-                                receiver,
-                                &Symbol::Relation(Relation::LessThan),
-                                arg,
-                            )),
-                            "greater_than" => SemanticExpression::logical(LogicalExpression::relation(
-                                receiver,
-                                &Symbol::Relation(Relation::GreaterThan),
-                                arg,
-                            )),
-                            "less_equal" => SemanticExpression::logical(LogicalExpression::relation(
-                                receiver,
-                                &Symbol::Relation(Relation::LessEqual),
-                                arg,
-                            )),
+                            "not_equal_to" => {
+                                SemanticExpression::logical(LogicalExpression::relation(
+                                    receiver,
+                                    &Symbol::Relation(Relation::NotEqual),
+                                    arg,
+                                ))
+                            }
+                            "less_than" => {
+                                SemanticExpression::logical(LogicalExpression::relation(
+                                    receiver,
+                                    &Symbol::Relation(Relation::LessThan),
+                                    arg,
+                                ))
+                            }
+                            "greater_than" => {
+                                SemanticExpression::logical(LogicalExpression::relation(
+                                    receiver,
+                                    &Symbol::Relation(Relation::GreaterThan),
+                                    arg,
+                                ))
+                            }
+                            "less_equal" => {
+                                SemanticExpression::logical(LogicalExpression::relation(
+                                    receiver,
+                                    &Symbol::Relation(Relation::LessEqual),
+                                    arg,
+                                ))
+                            }
                             "greater_equal" => {
                                 SemanticExpression::logical(LogicalExpression::relation(
                                     receiver,
@@ -211,8 +223,4 @@ pub fn convert_expr(
         }
         _ => unreachable!(),
     }
-}
-
-pub fn convert_expr_(expr: &Expr, table: &mut HashMap<String, SemanticExpression>) {
-    println!("{:#?}", expr);
 }

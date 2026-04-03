@@ -37,13 +37,15 @@ impl Equation {
             optimize(&mut lhs);
             // 判断方程类型
             if let SemanticExpression::Numeric(numeric) = lhs {
-                let linear_eq = LinearEquation::new(numeric);
-                return Self::SingleVariableEquation(SingleVariableEquation::LinearEquation(
-                    linear_eq,
-                ));
+                let linear_eq = LinearEquation::from(numeric);
+                if let Some(linear_eq) = linear_eq {
+                    return Self::SingleVariableEquation(SingleVariableEquation::LinearEquation(
+                        linear_eq,
+                    ));
+                }
             }
         }
-        panic!("invalid equation format");
+        panic!("unsupported equation format");
     }
 
     pub fn solve(&self) -> Option<SemanticExpression> {

@@ -2,7 +2,6 @@ pub mod logic;
 mod macros;
 pub mod numeric;
 
-use crate::equation::linear::LinearEquation;
 use crate::lexer::constant::Number;
 use crate::lexer::symbol::{Relation, Symbol};
 use crate::semantic::semantic_ir::logic::LogicalExpression;
@@ -165,21 +164,6 @@ impl SemanticExpression {
             _ => false,
         }
     }
-
-    pub fn to_linear(&self) -> Option<LinearEquation> {
-        match self {
-            SemanticExpression::Numeric(numeric) => match numeric {
-                Constant(_c) => todo!(),
-                NumericExpression::Variable(_) => todo!(),
-                NumericExpression::Negation(_) => todo!(),
-                NumericExpression::Addition(_) => todo!(),
-                NumericExpression::Multiplication(_) => todo!(),
-                NumericExpression::Power { .. } => todo!(),
-                NumericExpression::Piecewise { .. } => todo!(),
-            },
-            _ => None,
-        }
-    }
 }
 
 impl_expr_binary_operation!(Add, add, addition);
@@ -192,7 +176,6 @@ impl_expr_binary_operation!(BitOr, bitor, or);
 impl_expr_unary_operation!(Neg, neg, negation);
 impl_expr_unary_operation!(Not, not, not);
 
-// TODO 定义 trait 规范这几种类型
 impl_expr_numeric_operation!(Add, add, addition, i32, i64, f32, f64, u32, u64);
 impl_expr_numeric_operation!(Sub, sub, subtraction, i32, i64, f32, f64, u32, u64);
 impl_expr_numeric_operation!(Mul, mul, multiplication, i32, i64, f32, f64, u32, u64);
