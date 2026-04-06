@@ -368,6 +368,7 @@ impl NumericExpression {
         }
     }
 
+    // TODO 还需要处理 otherwise 的嵌套
     pub fn piecewise(
         cases: Vec<(LogicalExpression, NumericExpression)>,
         otherwise: Option<NumericExpression>,

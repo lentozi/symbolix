@@ -12,7 +12,8 @@ use symbolix_core::semantic::variable::VariableType;
 use symbolix_core::semantic::Analyzer;
 use symbolix_core::var;
 use syn::parse::{Parse, ParseStream};
-use syn::{BinOp, Expr, LitStr, Token, UnOp};
+use syn::{BinOp, Block, Expr, ExprIf, Lit, LitStr, Token, UnOp};
+use symbolix_core::lexer::constant::Number;
 
 struct VarArgs {
     name: String,
@@ -42,7 +43,7 @@ impl Parse for VarArgs {
 }
 
 pub fn convert_block(
-    block: &syn::Block,
+    block: &Block,
     mut table: &mut HashMap<String, SemanticExpression>,
 ) -> (Vec<SemanticExpression>, Vec<Ident>) {
     for stmt in &block.stmts {
@@ -60,7 +61,7 @@ pub fn convert_block(
                 // expr 是等号右侧的元数据
                 let expr_token = local.init.as_ref().unwrap().clone();
 
-                // 右侧可能出现的：宏调用、方法调用、二元表达式
+                // 右侧可能出现的：宏调用、方法调用、二元表达式、if 语句
                 let expr = convert_expr(expr_token.expr.as_ref(), &mut table);
 
                 table.insert(var_name, expr);
@@ -72,83 +73,6 @@ pub fn convert_block(
                     panic!("unexpected ';'");
                 }
 
-                // let (code, return_type): (proc_macro2::TokenStream, proc_macro2::TokenStream) =
-                //     match expr {
-                //         Expr::Tuple(tuple_expr) => {
-                //             let expr_list = tuple_expr
-                //                 .elems
-                //                 .iter()
-                //                 .map(|x| convert_expr(x, &mut table))
-                //                 .collect::<Vec<_>>();
-                //
-                //             let return_name_list = tuple_expr
-                //                 .elems
-                //                 .iter()
-                //                 .enumerate()
-                //                 .map(|(i, x)| match x {
-                //                     Expr::Path(path) => path.path.get_ident().unwrap().clone(),
-                //                     _ => format_ident!("_{}", i),
-                //                 })
-                //                 .collect::<Vec<_>>();
-                //
-                //             let code = multi_codegen_semantic(&expr_list, &return_name_list);
-                //
-                //             let return_types = expr_list
-                //                 .iter()
-                //                 .map(get_func_return_type)
-                //                 .collect::<Vec<_>>();
-                //
-                //             let return_type = quote! {
-                //                 ( #(#return_types),* )
-                //             };
-                //
-                //             (code, return_type)
-                //         }
-                //         _ => {
-                //             let expr = convert_expr(expr, &mut table);
-                //             let code = codegen_semantic(&expr);
-                //
-                //             let return_type = get_func_return_type(&expr);
-                //
-                //             (code, return_type)
-                //         }
-                //     };
-                //
-                // let (var_names, var_types) = get_func_arguments();
-                //
-                // let doc_comment = format!(
-                //     "Compiled Formula\n\nArguments in order: ({})",
-                //     var_names
-                //         .iter()
-                //         .map(|v| v.to_string())
-                //         .collect::<Vec<_>>()
-                //         .join(", ")
-                // );
-                //
-                // let expanded = quote! {
-                //     {
-                //         #[derive(Clone, Copy)]
-                //         #[doc = #doc_comment]
-                //         struct CompiledFormula;
-                //
-                //         impl CompiledFormula {
-                //             pub fn calculate(&self, #(#var_names: #var_types),*) -> #return_type {
-                //                 #code
-                //             }
-                //
-                //             pub fn to_closure(&self) -> Box<dyn Fn(#(#var_types),*) -> #return_type> {
-                //                 #[doc = #doc_comment]
-                //                 Box::new(|#(#var_names: #var_types),*| -> #return_type {
-                //                     #code
-                //                 })
-                //             }
-                //         }
-                //
-                //         CompiledFormula
-                //     }
-                // };
-                //
-                // return expanded.into();
                 return match expr {
                     Expr::Tuple(tuple_expr) => {
                         let expr_list = tuple_expr
@@ -193,26 +117,51 @@ pub fn convert_block(
 /// 8. 单独变量
 pub fn convert_expr(
     expr: &Expr,
-    table: &mut HashMap<String, SemanticExpression>,
+    mut table: &mut HashMap<String, SemanticExpression>,
 ) -> SemanticExpression {
     match expr {
+        Expr::Lit(lit_expr) => {
+            match &lit_expr.lit {
+                Lit::Int(lit_int) => SemanticExpression::numeric(NumericExpression::constant(Number::integer(lit_int.base10_parse().expect("failed to parse lit_int")))),
+                Lit::Float(lit_float) => SemanticExpression::numeric(NumericExpression::constant(Number::float(lit_float.base10_parse().expect("failed to parse lit_float")))),
+                Lit::Bool(lit_bool) => SemanticExpression::logical(LogicalExpression::constant(lit_bool.value)),
+                _ => panic!("unsupported literal"),
+            }
+        }
         Expr::Binary(binary_expr) => {
             let left = convert_expr(binary_expr.left.as_ref(), table);
             let right = convert_expr(binary_expr.right.as_ref(), table);
-            match binary_expr.op {
+            match &binary_expr.op {
                 BinOp::Add(_) => left + right,
                 BinOp::Sub(_) => left - right,
                 BinOp::Mul(_) => left * right,
                 BinOp::Div(_) => left / right,
                 BinOp::And(_) => left & right,
                 BinOp::Or(_) => left | right,
-                _ => unreachable!(),
+                _ => {
+                    let left = match left {
+                        SemanticExpression::Numeric(numeric) => numeric,
+                        _ => panic!("must be numeric expression"),
+                    };
+
+                    let right = match right {
+                        SemanticExpression::Numeric(numeric) => numeric,
+                        _ => panic!("must be numeric expression"),
+                    };
+
+                    match &binary_expr.op {
+                        BinOp::Eq(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::Equal), &right)),
+                        BinOp::Ne(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::NotEqual), &right)),
+                        BinOp::Gt(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::GreaterThan), &right)),
+                        BinOp::Lt(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::LessThan), &right)),
+                        BinOp::Ge(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::GreaterEqual), &right)),
+                        BinOp::Le(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::LessEqual), &right)),
+                        _ => panic!("unsupported binary op: {:?}", binary_expr.op),
+                    }
+                }
             }
         }
-        Expr::If(if_expr) => {
-            let cond = convert_expr(if_expr.cond.as_ref(), table);
-            cond // TODO
-        }
+        Expr::If(if_expr) => handle_if(if_expr, &mut table),
         Expr::Macro(macro_call) => {
             let mac = macro_call.mac.clone();
 
@@ -363,9 +312,53 @@ pub fn convert_expr(
             match unary_expr.op {
                 UnOp::Not(_) => !expr,
                 UnOp::Neg(_) => -expr,
-                _ => unreachable!(),
+                _ => panic!("unsupported unary operator: {:?}", unary_expr.op),
             }
         }
-        _ => unreachable!(),
+        _ => panic!("unsupported expression: {:?}", expr),
     }
+}
+
+fn handle_if(if_expr: &ExprIf, mut table: &mut HashMap<String, SemanticExpression>) -> SemanticExpression {
+    let cond = match convert_expr(if_expr.cond.as_ref(), table) {
+        SemanticExpression::Logical(logical) => logical,
+        _ => panic!("expected a logical expression"),
+    };
+
+    let expr = match handle_block_in_if(&if_expr.then_branch, &mut table) {
+        SemanticExpression::Numeric(numeric) => numeric,
+        _ => panic!("expected numeric expression in 'if' expr"),
+    };
+
+    let else_expr = if let Some(else_branch) = &if_expr.else_branch {
+        match else_branch.1.as_ref() {
+            Expr::Block(block_branch) => handle_block_in_if(&block_branch.block, &mut table),
+            Expr::If(if_branch) => handle_if(if_branch, &mut table),
+            _ => panic!("unexpected expr after 'else'"),
+        }
+    } else {
+        panic!("missing 'else' after 'if'");
+    };
+
+    let else_expr = match else_expr {
+        SemanticExpression::Numeric(numeric) => numeric,
+        _ => panic!("expected numeric expression in 'if' expr"),
+    };
+
+    let cases = vec![(cond, expr)];
+    let otherwise = Some(else_expr);
+
+    SemanticExpression::numeric(NumericExpression::piecewise(cases, otherwise))
+}
+
+fn handle_block_in_if(block: &Block, mut table: &mut HashMap<String, SemanticExpression>) -> SemanticExpression {
+    let (expr_list, _): (Vec<SemanticExpression>, Vec<Ident>) = convert_block(&block, &mut table);
+
+    if expr_list.len() > 1 {
+        panic!("unexpected tuple in if block");
+    } else if expr_list.len() == 0 {
+        panic!("must return in if block");
+    }
+
+    expr_list.into_iter().next().expect("failed to run handle_block_in_if")
 }
