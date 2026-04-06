@@ -1,3 +1,7 @@
+use crate::codegen::{codegen_semantic, get_func_arguments, get_func_return_type, multi_codegen_semantic};
+use proc_macro::{TokenStream};
+use proc_macro2::Ident;
+use quote::{format_ident, quote};
 use std::collections::HashMap;
 use symbolix_core::lexer::symbol::{Relation, Symbol};
 use symbolix_core::lexer::Lexer;
@@ -35,6 +39,147 @@ impl Parse for VarArgs {
 
         Ok(VarArgs { name, ty })
     }
+}
+
+pub fn convert_block(
+    block: &syn::Block,
+    mut table: &mut HashMap<String, SemanticExpression>,
+) -> (Vec<SemanticExpression>, Vec<Ident>) {
+    for stmt in &block.stmts {
+        match stmt {
+            // let 赋值
+            syn::Stmt::Local(local) => {
+                // println!("{:#?}", local);
+                let pat = local.pat.clone();
+
+                let var_name = match &pat {
+                    syn::Pat::Ident(ident) => ident.ident.to_string(),
+                    _ => panic!("invalid pat"),
+                };
+
+                // expr 是等号右侧的元数据
+                let expr_token = local.init.as_ref().unwrap().clone();
+
+                // 右侧可能出现的：宏调用、方法调用、二元表达式
+                let expr = convert_expr(expr_token.expr.as_ref(), &mut table);
+
+                table.insert(var_name, expr);
+            }
+            syn::Stmt::Item(_) => unreachable!(),
+            // expr 只能作为返回值出现，可能是普通表达式，可能是元组
+            syn::Stmt::Expr(expr, semi) => {
+                if semi.is_some() {
+                    panic!("unexpected ';'");
+                }
+
+                // let (code, return_type): (proc_macro2::TokenStream, proc_macro2::TokenStream) =
+                //     match expr {
+                //         Expr::Tuple(tuple_expr) => {
+                //             let expr_list = tuple_expr
+                //                 .elems
+                //                 .iter()
+                //                 .map(|x| convert_expr(x, &mut table))
+                //                 .collect::<Vec<_>>();
+                //
+                //             let return_name_list = tuple_expr
+                //                 .elems
+                //                 .iter()
+                //                 .enumerate()
+                //                 .map(|(i, x)| match x {
+                //                     Expr::Path(path) => path.path.get_ident().unwrap().clone(),
+                //                     _ => format_ident!("_{}", i),
+                //                 })
+                //                 .collect::<Vec<_>>();
+                //
+                //             let code = multi_codegen_semantic(&expr_list, &return_name_list);
+                //
+                //             let return_types = expr_list
+                //                 .iter()
+                //                 .map(get_func_return_type)
+                //                 .collect::<Vec<_>>();
+                //
+                //             let return_type = quote! {
+                //                 ( #(#return_types),* )
+                //             };
+                //
+                //             (code, return_type)
+                //         }
+                //         _ => {
+                //             let expr = convert_expr(expr, &mut table);
+                //             let code = codegen_semantic(&expr);
+                //
+                //             let return_type = get_func_return_type(&expr);
+                //
+                //             (code, return_type)
+                //         }
+                //     };
+                //
+                // let (var_names, var_types) = get_func_arguments();
+                //
+                // let doc_comment = format!(
+                //     "Compiled Formula\n\nArguments in order: ({})",
+                //     var_names
+                //         .iter()
+                //         .map(|v| v.to_string())
+                //         .collect::<Vec<_>>()
+                //         .join(", ")
+                // );
+                //
+                // let expanded = quote! {
+                //     {
+                //         #[derive(Clone, Copy)]
+                //         #[doc = #doc_comment]
+                //         struct CompiledFormula;
+                //
+                //         impl CompiledFormula {
+                //             pub fn calculate(&self, #(#var_names: #var_types),*) -> #return_type {
+                //                 #code
+                //             }
+                //
+                //             pub fn to_closure(&self) -> Box<dyn Fn(#(#var_types),*) -> #return_type> {
+                //                 #[doc = #doc_comment]
+                //                 Box::new(|#(#var_names: #var_types),*| -> #return_type {
+                //                     #code
+                //                 })
+                //             }
+                //         }
+                //
+                //         CompiledFormula
+                //     }
+                // };
+                //
+                // return expanded.into();
+                return match expr {
+                    Expr::Tuple(tuple_expr) => {
+                        let expr_list = tuple_expr
+                            .elems
+                            .iter()
+                            .map(|x| convert_expr(x, &mut table))
+                            .collect::<Vec<_>>();
+
+                        let return_name_list = tuple_expr
+                            .elems
+                            .iter()
+                            .enumerate()
+                            .map(|(i, x)| match x {
+                                Expr::Path(path) => path.path.get_ident().unwrap().clone(),
+                                _ => format_ident!("_{}", i),
+                            })
+                            .collect::<Vec<_>>();
+
+                        (expr_list, return_name_list)
+                    }
+                    _ => {
+                        let expr = convert_expr(expr, &mut table);
+                        (vec![expr], vec![])
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("block must end with return value");
 }
 
 /// 解析所有可能出现的表达式，包括：

@@ -1,6 +1,5 @@
-use proc_macro2::{TokenStream, Ident};
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-
 use symbolix_core::lexer::symbol::{Relation, Symbol};
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
@@ -37,6 +36,27 @@ pub fn get_func_return_type(expr: &SemanticExpression) -> TokenStream {
         quote! { f64 }
     } else {
         quote! { bool }
+    }
+}
+
+pub fn multi_codegen_semantic(
+    expr_list: &Vec<SemanticExpression>,
+    name_list: &Vec<Ident>,
+) -> TokenStream {
+    let code_list = expr_list.iter().map(codegen_semantic).collect::<Vec<_>>();
+
+    let lets = name_list
+        .iter()
+        .zip(code_list.iter())
+        .map(|(name, code)| {
+            quote! {
+                let #name = #code;
+            }
+        });
+
+    quote! {
+        #(#lets)*
+        (#(#name_list),*)
     }
 }
 
@@ -204,6 +224,45 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
             }
         }
     }
+}
+
+pub fn generate_struct(
+    var_names: Vec<Ident>,
+    var_types: Vec<TokenStream>,
+    return_type: TokenStream,
+    code: TokenStream) -> TokenStream {
+
+    let doc_comment = format!(
+        "Compiled Formula\n\nArguments in order: ({})",
+        var_names
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    quote! {
+        {
+            #[derive(Clone, Copy)]
+            #[doc = #doc_comment]
+            struct CompiledFormula;
+
+            impl CompiledFormula {
+                pub fn calculate(&self, #(#var_names: #var_types),*) -> #return_type {
+                    #code
+                }
+
+                pub fn to_closure(&self) -> Box<dyn Fn(#(#var_types),*) -> #return_type> {
+                    #[doc = #doc_comment]
+                    Box::new(|#(#var_names: #var_types),*| -> #return_type {
+                        #code
+                    })
+                }
+            }
+
+            CompiledFormula
+        }
+    }.into()
 }
 
 #[test]
