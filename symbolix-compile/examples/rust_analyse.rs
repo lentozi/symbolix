@@ -7,12 +7,12 @@ fn main() {
 
         // z = var!("z", i32);
 
-        let expr = expr!("hello + 2");
+        let expr = expr!("z + 2");
 
         let expr = if y >= 10 {
-            expr!("hello + 2 * 10")
+            expr!("z + 2 * 10")
         } else {
-            expr!("hello * 2")
+            expr!("z * 2")
         };
 
         let expr = expr + y;

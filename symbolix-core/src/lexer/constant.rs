@@ -74,10 +74,10 @@ impl Constant {
     /// # 示例
     ///
     /// ```
-    /// use symbolix_core::lexer::constant::Constant;
+    /// use symbolix_core::lexer::constant::{Constant, Number};
     ///
     /// let num = Constant::integer(42);
-    /// assert_eq!(num, Constant::Number(Number::Integer(42)));
+    /// assert_eq!(num, Constant::number(Number::integer(42)));
     /// ```
     pub fn integer(num: i64) -> Constant {
         Constant::Number(Number::Integer(num))
@@ -88,10 +88,10 @@ impl Constant {
     /// # 示例
     ///
     /// ```
-    /// use symbolix_core::lexer::constant::Constant;
+    /// use symbolix_core::lexer::constant::{Constant, Number};
     ///
     /// let num = Constant::float(3.14);
-    /// assert_eq!(num, Constant::Number(Number::Float(OrderedFloat(3.14))));
+    /// assert_eq!(num, Constant::number(Number::float(3.14)));
     /// ```
     pub fn float(num: f64) -> Constant {
         Constant::Number(Number::Float(OrderedFloat(num)))
@@ -102,10 +102,10 @@ impl Constant {
     /// # 示例
     ///
     /// ```
-    /// use symbolix_core::lexer::constant::Constant;
+    /// use symbolix_core::lexer::constant::{Constant, Number};
     ///
     /// let num = Constant::fraction(1, 2);
-    /// assert_eq!(num, Constant::Number(Number::Fraction(Fraction::new(1, 2))));
+    /// assert_eq!(num, Constant::number(Number::fraction(1, 2)));
     /// ```
     pub fn fraction(numerator: i64, denominator: i64) -> Constant {
         Constant::Number(Number::Fraction(Fraction::new(numerator, denominator)))

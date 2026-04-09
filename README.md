@@ -1,120 +1,236 @@
 # symbolix
 
-一个用 Rust 实现的表达式解析、语义分析与编译工具集（workspace），包含核心运算模块和用于在编译期生成表达式计算代码的 `proc-macro`模块。适合作为表达式语言解析、优化与嵌入计算功能的基础库或学习示例。
+`symbolix` 是一个用 Rust 编写的表达式工具链 workspace，围绕“表达式字符串 -> 词法分析 -> 语法分析 -> 语义 IR -> 优化 -> 求值 / 代码生成”这条链路组织。当前仓库包含核心分析库 `symbolix-core` 和编译期宏 crate `symbolix-compile`。
 
-主要 crates:
-- `symbolix-core` — 解析（lexer / parser）、语义（semantic）、优化（optimizer）与上下文管理等核心功能。
-- `symbolix-compile` — 一个 proc-macro（`compile!`），用于在编译期把表达式编译为可直接计算的代码/结构。
+它适合用于：
 
-## 特性
-- Pratt parser 风格的表达式解析
-- 词法分析器（`Lexer`）
-- 抽象语法树（AST）到语义树的转换
-- 简单表达式优化器（常量折叠等）
-- 编译时宏（`compile!`）将字符串表达式嵌入生成的可执行代码
-- 示例项目包含可视化（依赖 `tree-drawer`）用于调试和展示树结构
+- 构建自定义表达式语言
+- 在 Rust 项目中嵌入公式计算能力
+- 研究 Pratt parser、语义分析和简单代数化简
+- 在编译期把表达式编译为可直接调用的 Rust 代码
 
-## 需求
-- Rust 1.60+（使用 2021 edition 的代码）
-- 推荐使用 `cargo` 管理构建与测试
-- 若运行带 GUI 的示例，需要能够打开图形窗口（`tree-drawer` 依赖）
+## 当前能力
 
-## 仓库结构概览
-- `Cargo.toml` — workspace 定义（顶层）
-- `symbolix-core/` — 核心库
-  - `src/` — 源代码目录（`lexer`, `parser`, `semantic`, `optimizer`, `context` 等）
-  - `examples/` — 核心示例（包含可视化）
-- `symbolix-compile/` — proc-macro crate
-  - `src/` — 宏实现
-  - `examples/` — 使用 `compile!` 的示例
-- `examples/` — 顶层示例（可选）
+- 词法分析：支持整数、浮点、科学计数法、布尔字面量和 Unicode 标识符
+- Pratt parser：支持括号、一元前缀运算、二元运算、关系运算和三元条件表达式
+- 语义分析：将 AST 转换为数值 / 逻辑语义 IR
+- 优化：包含常量折叠、扁平化、规范化等优化步骤
+- 方程能力：支持单变量一次方程求解
+- 编译期代码生成：
+  - `compile!`：从表达式字符串生成可调用对象
+  - `symbolix_rust!`：从块状 DSL 生成可调用对象
+
+## Workspace 结构
+
+- `symbolix-core/`
+  - 表达式核心库
+  - 包含 `lexer`、`parser`、`semantic`、`optimizer`、`equation`、`context` 等模块
+- `symbolix-compile/`
+  - `proc-macro` crate
+  - 提供 `compile!` 和 `symbolix_rust!`
+- `examples/`
+  - 顶层示例，演示如何直接使用编译期宏
+- `src/lib.rs`
+  - 顶层 crate 目前仅作为 workspace 入口，没有额外公开 API
+- `documents/`
+  - 项目文档或设计资料
+
+## 支持的表达式语法
+
+- 数值与布尔字面量：`1`、`3.14`、`1.23e-4`、`true`、`false`
+- 标识符：`x`、`_tmp`、`变量`、`αβγ`
+- 一元运算：`+x`、`-x`、`!flag`
+- 二元运算：`+`、`-`、`*`、`/`、`%`、`^`、`&&`、`||`
+- 关系运算：`<`、`>`、`<=`、`>=`、`==`、`!=`
+- 三元表达式：`cond ? a : b`
+- 分组：`(x + y) * z`
+
+## 环境要求
+
+- Rust stable（2021 edition）
+- `cargo`
+- 首次构建时需要拉取 Git 依赖 `tree-drawer`
 
 ## 快速开始
 
-1. 克隆并进入项目根目录（包含 workspace `Cargo.toml`）：
-```bash
-# 在本地（示例命令）：
-git clone https://github.com/lentozi/symbolix.git symbolix
-cd symbolix
-```
-
-2. 构建整个 workspace：
 ```bash
 cargo build --workspace
 ```
 
-3. 只构建特定 crate（可选）：
+运行测试：
+
 ```bash
-cargo build -p symbolix-core
-cargo build -p symbolix-compile
+cargo test --workspace
 ```
 
-## 运行示例
+运行示例：
 
-- `symbolix-core` 的示例展示了 Lexer、Parser、语义转换、优化，并使用 `tree-drawer` 打开可视化窗口（需 GUI 环境）：
+```bash
+cargo run -p symbolix-core --example compile
+cargo run -p symbolix-core --example equation
+cargo run -p symbolix-core --example error
+
+cargo run -p symbolix-compile --example main
+cargo run -p symbolix-compile --example rust_analyse
+
+cargo run --example workspace_demo
+```
+
+## 使用 `symbolix-core`
+
+下面的示例展示了从字符串表达式到语义 IR 的基本流程：
+
 ```rust
-use symbolix_core::lexer::symbol::Precedence;
-use symbolix_core::lexer::Lexer;
-use symbolix_core::optimizer::optimize;
-use symbolix_core::parser::expression::Expression;
-use symbolix_core::parser::pratt_parsing;
-use symbolix_core::semantic::semantic_without_ctx;
-use symbolix_core::semantic::variable::VariableType;
-use symbolix_core::var;
-use tree_drawer::egui_viewer::TreeViewer;
-// ... 示例中会解析表达式、优化并展示树结构
+use symbolix_core::{
+    lexer::Lexer,
+    new_compile_context,
+    optimizer::optimize,
+    parser::Parser,
+    semantic::Analyzer,
+};
+
+fn main() {
+    new_compile_context! {
+        let mut lexer = Lexer::new("x > 100 ? x * (2 + 3) : x / 2");
+        let expression = Parser::pratt(&mut lexer);
+
+        let mut analyzer = Analyzer::new();
+        let mut semantic = analyzer.analyze_with_ctx(&expression);
+        optimize(&mut semantic);
+
+        println!("{}", semantic);
+    }
+}
 ```
 
-- `symbolix-compile` 的示例演示如何使用编译期宏 `compile!` 直接在代码中嵌入表达式并计算：
+说明：
+
+- `new_compile_context!` 会创建编译上下文，并在分析过程中管理变量注册与错误收集
+- 未显式声明类型的变量会根据上下文推断为数值变量或布尔变量
+- 数值变量当前默认推断为 `f64`
+
+## 求解单变量一次方程
+
+`symbolix-core` 当前提供单变量一次方程求解能力：
+
+```rust
+use symbolix_core::{
+    equation::Equation,
+    lexer::Lexer,
+    new_compile_context,
+    optimizer::optimize,
+    parser::Parser,
+    semantic::Analyzer,
+};
+
+fn main() {
+    new_compile_context! {
+        let mut lexer = Lexer::new("2 * x + 3 == 9");
+        let expression = Parser::pratt(&mut lexer);
+
+        let mut semantic = Analyzer::new().analyze_with_ctx(&expression);
+        optimize(&mut semantic);
+
+        let equation = Equation::new(semantic);
+        let result = equation.solve().unwrap();
+        println!("x = {}", result);
+    }
+}
+```
+
+当前限制：
+
+- 只支持等式形式的表达式
+- 只支持单变量一次方程
+- 幂、多变量方程和更复杂的分段方程暂未支持
+
+## 使用 `compile!`
+
+`compile!` 会在编译期解析和优化表达式，并返回一个匿名对象。该对象当前至少包含：
+
+- `calculate(...)`
+- `to_closure()`
+
+示例：
+
 ```rust
 use symbolix_compile::compile;
 
 fn main() {
-    let code = compile!("-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0");
-    println!("{}", code.calculate(1.0, 100.0));
+    let formula = compile!("y + x * 2");
 
-    let code = compile!("x + y");
-    println!("{}", code.calculate(1.0, 100.0));
+    // 参数顺序按变量名字母序排列，这里是 (x, y)
+    println!("{}", formula.calculate(3.0, 10.0));
+
+    let gt = compile!("x > 100");
+    println!("{}", gt.calculate(120.0));
 }
 ```
 
-## 常见用法说明
+补充说明：
 
-- 解析与语义转换流程（高层）：
-  1. 使用 `Lexer::new(input)` 将字符串转为 token 流。
-  2. 使用 Pratt parsing（`pratt_parsing`）构造 AST。
-  3. 使用 `semantic_without_ctx` 将 AST 转换为语义树。
-  4. 调用 `optimize` 对语义树进行简单优化（例如常量折叠）。
-  5. （可选）将生成的语义结构用于运行时或通过 `compile!` 在编译期生成代码。
+- `calculate(...)` 的参数顺序按变量名排序，而不是按表达式中首次出现的顺序
+- 数值表达式返回 `f64`
+- 逻辑表达式返回 `bool`
 
-## API 摘要
-- `symbolix_core::lexer::Lexer` — 词法分析器入口类型。
-- `symbolix_core::parser::pratt_parsing` — Pratt parser 入口函数，用于解析表达式。
-- `symbolix_core::semantic::semantic_without_ctx` — AST -> 语义树转换。
-- `symbolix_core::optimizer::optimize` — 语义树优化。
-- `symbolix_compile::compile!` — proc-macro，将字符串表达式在编译期编译为可用对象（示例中生成的对象具有 `calculate` 方法）。
+## 使用 `symbolix_rust!`
 
-## 测试
-- 运行 workspace 测试：
-```bash
-cargo test --workspace
+`symbolix_rust!` 提供了一个更接近 Rust 代码风格的块状 DSL，适合把多个中间表达式组合起来并在最后返回一个表达式或元组。
+
+示例：
+
+```rust
+use symbolix_compile::symbolix_rust;
+
+fn main() {
+    let code = symbolix_rust! {
+        let x = var!("x", f64);
+        let z = var!("z", f64);
+
+        let expr = if x >= 10.0 {
+            expr!("z + 20")
+        } else {
+            expr!("z * 2")
+        };
+
+        (expr + x, x)
+    };
+
+    // 参数顺序按真实变量名排序，即 (x, z)
+    println!("{}", code.calculate(10.0, 5.0).0);
+}
 ```
-- 各 crate 下也可能包含单独的测试与示例，可使用 `cargo test -p <crate>` 或 `cargo run -p <crate> --example <name>` 运行。
 
-## 开发指南
-- 代码风格：遵循常见的 Rust 风格（`rustfmt` / `clippy` 推荐）。
-- 本项目使用模块化设计：`lexer`、`parser`、`semantic`、`optimizer` 等分别负责不同阶段。
-- 如果你要扩展解析规则或增加运算符，请优先在 `symbolix-core/src/parser` 与 `symbolix-core/src/lexer` 中进行修改，并补充相应的测试与示例。
-- 进行改动后，请运行 `cargo test --workspace` 并查看示例是否按预期工作。
+这个 DSL 当前支持的核心元素包括：
 
-## 贡献
-- 欢迎提交 issue 与 PR。请在 PR 中：
-  - 清晰描述变更目的与范围；
-  - 添加/更新相应测试与示例；
-  - 遵循现有代码风格并运行测试确保没有回归。
+- `var!("name", ty)` 声明变量
+- `expr!("...")` 从字符串表达式生成语义表达式
+- 普通算术 / 逻辑 / 关系表达式
+- `if / else`
+- 以表达式或元组作为块的最终返回值
+
+## 已有示例文件
+
+- `symbolix-core/examples/compile.rs`
+  - 演示手动执行 lexer、parser、semantic、optimizer 流程
+- `symbolix-core/examples/equation.rs`
+  - 演示方程求解
+- `symbolix-core/examples/error.rs`
+  - 演示错误输入的处理方式
+- `symbolix-compile/examples/main.rs`
+  - 演示 `compile!`
+- `symbolix-compile/examples/rust_analyse.rs`
+  - 演示 `symbolix_rust!`
+- `examples/workspace_demo.rs`
+  - 顶层入口示例
+
+## 开发建议
+
+- 若要扩展表达式语法，优先查看 `symbolix-core/src/lexer` 和 `symbolix-core/src/parser`
+- 若要扩展语义能力或优化规则，优先查看 `symbolix-core/src/semantic` 和 `symbolix-core/src/optimizer`
+- 若要扩展编译期宏行为，重点查看 `symbolix-compile/src/lib.rs`、`symbolix-compile/src/codegen.rs` 和 `symbolix-compile/src/rust_expr.rs`
+- 修改后建议至少运行一次 `cargo test --workspace`
 
 ## 许可证
-- 本项目采用MIT许可。项目根目录下包含完整的许可文本文件：
-  - `LICENSE`：MIT 许可证（Copyright (c) 2026 lentozi）
-- `symbolix/Cargo.toml` 中的 `license` 字段已设置为 `MIT`，并保留了 `license-file = "LICENSE"` 以兼容常见工具。
-- 使用或再分发本项目时，请保留原始的版权声明与许可文件，并遵循所选许可的条款。
+
+本项目采用 MIT 许可证，详见根目录中的 `LICENSE` 文件。
