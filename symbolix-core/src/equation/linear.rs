@@ -26,7 +26,7 @@ impl LinearEquation {
                 rhs: Number::integer(0),
             }),
             NumericExpression::Negation(numeric_expression) => {
-                LinearEquation::from(*numeric_expression)
+                LinearEquation::from(-(*numeric_expression))
             }
             NumericExpression::Addition(numeric_bucket) => {
                 let linear_list = numeric_bucket
