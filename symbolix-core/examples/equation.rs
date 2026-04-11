@@ -13,8 +13,8 @@ fn main() {
         optimize(&mut semantic_expression);
         println!("{}", semantic_expression);
 
-        let equation = Equation::new(semantic_expression);
+        let equation = Equation::infer(semantic_expression).unwrap();
         let result = equation.solve().unwrap();
-        println!("x = {}", result);
+        println!("{result:#?}");
     }
 }

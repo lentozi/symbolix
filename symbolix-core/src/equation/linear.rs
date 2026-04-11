@@ -1,128 +1,145 @@
-use crate::optimizer::optimize;
 use crate::{
-    equation::EquationTrait,
+    equation::{
+        contains_target, is_zero, optimize_numeric, piecewise::split_branch_equation, Equation,
+        SolutionBranch, SolutionSet, SolveError, Solver,
+    },
     lexer::constant::Number,
-    semantic::semantic_ir::{numeric::NumericExpression, SemanticExpression},
+    semantic::{semantic_ir::numeric::NumericExpression, variable::Variable},
 };
 
-pub struct LinearEquation {
-    coef: Number,
-    rhs: Number,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinearForm {
+    pub target: Variable,
+    pub coef: NumericExpression,
+    pub constant: NumericExpression,
 }
 
-impl LinearEquation {
-    pub fn new(coef: Number, rhs: Number) -> Self {
-        Self { coef, rhs }
-    }
-    // 默认 raw 为等号左侧，等号右侧为 0，目前只支持单变量方程（TODO）
-    pub fn from(raw: NumericExpression) -> Option<Self> {
-        match raw {
-            NumericExpression::Constant(number) => Some(LinearEquation {
-                coef: Number::integer(0),
-                rhs: number,
-            }),
-            NumericExpression::Variable(_) => Some(LinearEquation {
-                coef: Number::integer(1),
-                rhs: Number::integer(0),
-            }),
-            NumericExpression::Negation(numeric_expression) => {
-                LinearEquation::from(-(*numeric_expression))
-            }
-            NumericExpression::Addition(numeric_bucket) => {
-                let linear_list = numeric_bucket
-                    .iter()
-                    .map(|e| LinearEquation::from(e))
-                    .collect::<Vec<_>>();
+pub struct LinearSolver;
 
-                // 如果有 None 直接返回 None
-                if linear_list.iter().any(|l| l.is_none()) {
-                    return None;
-                }
-
-                let linear_list = linear_list
-                    .into_iter()
-                    .map(|l| l.unwrap())
-                    .collect::<Vec<_>>();
-
-                Some(linear_list.into_iter().fold(
-                    LinearEquation::from(NumericExpression::Constant(Number::integer(0))).unwrap(),
-                    |acc, linear| LinearEquation::addition(&acc, &linear),
-                ))
-            }
-            NumericExpression::Multiplication(numeric_bucket) => {
-                // 统计 bucket 中所有的变量转换成的方程
-                let linear_list = numeric_bucket
-                    .iter()
-                    .map(|e| LinearEquation::from(e))
-                    .collect::<Vec<_>>();
-
-                // 如果有 None 直接返回 None
-                if linear_list.iter().any(|l| l.is_none()) {
-                    return None;
-                }
-
-                let linear_list = linear_list
-                    .into_iter()
-                    .map(|l| l.unwrap())
-                    .collect::<Vec<_>>();
-
-                // 统计 linear_list 中包含变量的项
-                let variable_linear_list = linear_list
-                    .iter()
-                    .filter(|linear| linear.coef != Number::integer(0))
-                    .collect::<Vec<_>>();
-
-                match variable_linear_list.len() {
-                    0 => {
-                        let product = linear_list
-                            .iter()
-                            .fold(Number::integer(1), |acc, l| acc * l.rhs.clone());
-
-                        Some(LinearEquation {
-                            coef: Number::integer(0),
-                            rhs: product,
-                        })
-                    }
-                    1 => {
-                        let var_term = variable_linear_list[0];
-                        // 计算所有常数项的积
-                        let const_product = linear_list
-                            .iter()
-                            .filter(|l| l.coef.is_zero())
-                            .fold(Number::integer(1), |acc, l| acc * l.rhs.clone());
-
-                        // 结果：(a * const_product)x + (b * const_product)
-                        Some(LinearEquation {
-                            coef: &var_term.coef * &const_product,
-                            rhs: &var_term.rhs * &const_product,
-                        })
-                    }
-                    // Non-linear expression: multiplication of multiple variables is not supported
-                    _ => None,
-                }
-            }
-            // Non-linear expression: power is not supported
-            NumericExpression::Power { .. } => None,
-            // 先不考虑分段函数
-            NumericExpression::Piecewise { cases, otherwise } => todo!(),
-        }
-    }
-
-    pub fn addition(linear1: &LinearEquation, linear2: &LinearEquation) -> Self {
-        LinearEquation {
-            coef: &linear1.coef + &linear2.coef,
-            rhs: &linear1.rhs + &linear2.rhs,
-        }
+impl LinearForm {
+    pub fn extract(expr: &NumericExpression, target: &Variable) -> Option<Self> {
+        let (coef, constant) = extract_linear_parts(expr, target)?;
+        Some(Self {
+            target: target.clone(),
+            coef: optimize_numeric(coef),
+            constant: optimize_numeric(constant),
+        })
     }
 }
 
-impl EquationTrait for LinearEquation {
-    fn solve(&self) -> Option<SemanticExpression> {
-        let mut result =
-            -SemanticExpression::numeric(NumericExpression::constant(self.rhs.clone()))
-                / SemanticExpression::numeric(NumericExpression::constant(self.coef.clone()));
-
-        optimize(&mut result);
-        Some(result)
+impl Solver for LinearSolver {
+    /// 判断是否可求解
+    fn can_solve(eq: &Equation) -> bool {
+        let (_, expr) = split_branch_equation(eq);
+        LinearForm::extract(&expr, &eq.solve_for).is_some()
     }
+
+    fn solve(eq: &Equation) -> Result<SolutionSet, SolveError> {
+        let (constraint, expr) = split_branch_equation(eq);
+        let linear =
+            LinearForm::extract(&expr, &eq.solve_for).ok_or(SolveError::NonLinearExpression)?;
+
+        let branches = if is_zero(&linear.coef) {
+            if is_zero(&linear.constant) {
+                vec![SolutionBranch::identity(constraint)]
+            } else {
+                Vec::new()
+            }
+        } else {
+            let solution = optimize_numeric(-linear.constant.clone() / linear.coef.clone());
+            vec![SolutionBranch::finite(constraint, vec![solution])]
+        };
+
+        Ok(SolutionSet::new(eq.solve_for.clone(), branches))
+    }
+}
+
+fn extract_linear_parts(
+    expr: &NumericExpression,
+    target: &Variable,
+) -> Option<(NumericExpression, NumericExpression)> {
+    match expr {
+        NumericExpression::Constant(_) => Some((zero(), expr.clone())),
+        NumericExpression::Variable(variable) => {
+            if variable == target {
+                Some((one(), zero()))
+            } else {
+                Some((zero(), expr.clone()))
+            }
+        }
+        NumericExpression::Negation(inner) => {
+            let (coef, constant) = extract_linear_parts(inner, target)?;
+            Some((optimize_numeric(-coef), optimize_numeric(-constant)))
+        }
+        NumericExpression::Addition(bucket) => {
+            let mut coef = zero();
+            let mut constant = zero();
+            for expr in bucket.iter() {
+                let (term_coef, term_constant) = extract_linear_parts(&expr, target)?;
+                coef = optimize_numeric(coef + term_coef);
+                constant = optimize_numeric(constant + term_constant);
+            }
+            Some((coef, constant))
+        }
+        NumericExpression::Multiplication(bucket) => {
+            let forms = bucket
+                .iter()
+                .map(|expr| extract_linear_parts(&expr, target))
+                .collect::<Option<Vec<_>>>()?;
+
+            let variable_forms = forms
+                .iter()
+                .filter(|(coef, _)| !is_zero(coef))
+                .collect::<Vec<_>>();
+
+            match variable_forms.len() {
+                0 => {
+                    let constant = bucket
+                        .iter()
+                        .fold(one(), |acc, expr| optimize_numeric(acc * expr));
+                    Some((zero(), constant))
+                }
+                1 => {
+                    let mut constants = Vec::new();
+                    for (coef, constant) in &forms {
+                        if is_zero(coef) {
+                            constants.push(constant.clone());
+                        }
+                    }
+
+                    let const_product = constants
+                        .into_iter()
+                        .fold(one(), |acc, expr| optimize_numeric(acc * expr));
+
+                    let (coef, constant) = variable_forms[0];
+                    Some((
+                        optimize_numeric(coef.clone() * const_product.clone()),
+                        optimize_numeric(constant.clone() * const_product),
+                    ))
+                }
+                _ => None,
+            }
+        }
+        NumericExpression::Power { base, exponent } => {
+            if !contains_target(expr, target) {
+                return Some((zero(), expr.clone()));
+            }
+
+            match exponent.as_ref() {
+                NumericExpression::Constant(number) if number == &Number::integer(1) => {
+                    extract_linear_parts(base, target)
+                }
+                _ => None,
+            }
+        }
+        NumericExpression::Piecewise { .. } => None,
+    }
+}
+
+fn zero() -> NumericExpression {
+    NumericExpression::constant(Number::integer(0))
+}
+
+fn one() -> NumericExpression {
+    NumericExpression::constant(Number::integer(1))
 }

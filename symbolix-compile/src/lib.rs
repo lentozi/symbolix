@@ -6,16 +6,18 @@ use symbolix_core::{
     lexer::Lexer, new_compile_context, optimizer::optimize, parser::Parser,
     semantic::semantic_ir::SemanticExpression,
 };
-use syn::{parse_macro_input, Expr, LitStr};
+use syn::{parse_macro_input, LitStr};
 
-use crate::{codegen::codegen_semantic, rust_expr::convert_expr};
+use crate::codegen::codegen_semantic;
 
 mod codegen;
 mod rust_expr;
 
-use crate::codegen::{generate_struct, get_func_arguments, get_func_return_type, multi_codegen_semantic};
+use crate::codegen::{
+    generate_struct, get_func_arguments, get_func_return_type, multi_codegen_semantic,
+};
 use crate::rust_expr::convert_block;
-use quote::{format_ident, quote};
+use quote::quote;
 use symbolix_core::semantic::Analyzer;
 
 #[proc_macro]

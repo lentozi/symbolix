@@ -1,8 +1,7 @@
-use crate::codegen::{codegen_semantic, get_func_arguments, get_func_return_type, multi_codegen_semantic};
-use proc_macro::{TokenStream};
 use proc_macro2::Ident;
-use quote::{format_ident, quote};
+use quote::format_ident;
 use std::collections::HashMap;
+use symbolix_core::lexer::constant::Number;
 use symbolix_core::lexer::symbol::{Relation, Symbol};
 use symbolix_core::lexer::Lexer;
 use symbolix_core::semantic::semantic_ir::logic::LogicalExpression;
@@ -13,7 +12,6 @@ use symbolix_core::semantic::Analyzer;
 use symbolix_core::var;
 use syn::parse::{Parse, ParseStream};
 use syn::{BinOp, Block, Expr, ExprIf, Lit, LitStr, Token, UnOp};
-use symbolix_core::lexer::constant::Number;
 
 struct VarArgs {
     name: String,
@@ -97,7 +95,7 @@ pub fn convert_block(
                         let expr = convert_expr(expr, &mut table);
                         (vec![expr], vec![])
                     }
-                }
+                };
             }
             _ => {}
         }
@@ -120,14 +118,18 @@ pub fn convert_expr(
     mut table: &mut HashMap<String, SemanticExpression>,
 ) -> SemanticExpression {
     match expr {
-        Expr::Lit(lit_expr) => {
-            match &lit_expr.lit {
-                Lit::Int(lit_int) => SemanticExpression::numeric(NumericExpression::constant(Number::integer(lit_int.base10_parse().expect("failed to parse lit_int")))),
-                Lit::Float(lit_float) => SemanticExpression::numeric(NumericExpression::constant(Number::float(lit_float.base10_parse().expect("failed to parse lit_float")))),
-                Lit::Bool(lit_bool) => SemanticExpression::logical(LogicalExpression::constant(lit_bool.value)),
-                _ => panic!("unsupported literal"),
+        Expr::Lit(lit_expr) => match &lit_expr.lit {
+            Lit::Int(lit_int) => SemanticExpression::numeric(NumericExpression::constant(
+                Number::integer(lit_int.base10_parse().expect("failed to parse lit_int")),
+            )),
+            Lit::Float(lit_float) => SemanticExpression::numeric(NumericExpression::constant(
+                Number::float(lit_float.base10_parse().expect("failed to parse lit_float")),
+            )),
+            Lit::Bool(lit_bool) => {
+                SemanticExpression::logical(LogicalExpression::constant(lit_bool.value))
             }
-        }
+            _ => panic!("unsupported literal"),
+        },
         Expr::Binary(binary_expr) => {
             let left = convert_expr(binary_expr.left.as_ref(), table);
             let right = convert_expr(binary_expr.right.as_ref(), table);
@@ -150,12 +152,36 @@ pub fn convert_expr(
                     };
 
                     match &binary_expr.op {
-                        BinOp::Eq(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::Equal), &right)),
-                        BinOp::Ne(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::NotEqual), &right)),
-                        BinOp::Gt(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::GreaterThan), &right)),
-                        BinOp::Lt(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::LessThan), &right)),
-                        BinOp::Ge(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::GreaterEqual), &right)),
-                        BinOp::Le(_) => SemanticExpression::logical(LogicalExpression::relation(&left, &Symbol::Relation(Relation::LessEqual), &right)),
+                        BinOp::Eq(_) => SemanticExpression::logical(LogicalExpression::relation(
+                            &left,
+                            &Symbol::Relation(Relation::Equal),
+                            &right,
+                        )),
+                        BinOp::Ne(_) => SemanticExpression::logical(LogicalExpression::relation(
+                            &left,
+                            &Symbol::Relation(Relation::NotEqual),
+                            &right,
+                        )),
+                        BinOp::Gt(_) => SemanticExpression::logical(LogicalExpression::relation(
+                            &left,
+                            &Symbol::Relation(Relation::GreaterThan),
+                            &right,
+                        )),
+                        BinOp::Lt(_) => SemanticExpression::logical(LogicalExpression::relation(
+                            &left,
+                            &Symbol::Relation(Relation::LessThan),
+                            &right,
+                        )),
+                        BinOp::Ge(_) => SemanticExpression::logical(LogicalExpression::relation(
+                            &left,
+                            &Symbol::Relation(Relation::GreaterEqual),
+                            &right,
+                        )),
+                        BinOp::Le(_) => SemanticExpression::logical(LogicalExpression::relation(
+                            &left,
+                            &Symbol::Relation(Relation::LessEqual),
+                            &right,
+                        )),
                         _ => panic!("unsupported binary op: {:?}", binary_expr.op),
                     }
                 }
@@ -221,8 +247,10 @@ pub fn convert_expr(
 
                 match method_name.as_str() {
                     "solve" => {
-                        let equation = symbolix_core::equation::Equation::new(receiver_ir.clone());
-                        equation.solve().expect("equation solve failed")
+                        let equation =
+                            symbolix_core::equation::Equation::infer(receiver_ir.clone())
+                                .expect("equation infer failed");
+                        equation.solve_unique().expect("equation solve failed")
                     }
                     _ => panic!("unsupported method call {}", method_name),
                 }
@@ -319,7 +347,10 @@ pub fn convert_expr(
     }
 }
 
-fn handle_if(if_expr: &ExprIf, mut table: &mut HashMap<String, SemanticExpression>) -> SemanticExpression {
+fn handle_if(
+    if_expr: &ExprIf,
+    mut table: &mut HashMap<String, SemanticExpression>,
+) -> SemanticExpression {
     let cond = match convert_expr(if_expr.cond.as_ref(), table) {
         SemanticExpression::Logical(logical) => logical,
         _ => panic!("expected a logical expression"),
@@ -351,7 +382,10 @@ fn handle_if(if_expr: &ExprIf, mut table: &mut HashMap<String, SemanticExpressio
     SemanticExpression::numeric(NumericExpression::piecewise(cases, otherwise))
 }
 
-fn handle_block_in_if(block: &Block, mut table: &mut HashMap<String, SemanticExpression>) -> SemanticExpression {
+fn handle_block_in_if(
+    block: &Block,
+    mut table: &mut HashMap<String, SemanticExpression>,
+) -> SemanticExpression {
     let (expr_list, _): (Vec<SemanticExpression>, Vec<Ident>) = convert_block(&block, &mut table);
 
     if expr_list.len() > 1 {
@@ -360,5 +394,8 @@ fn handle_block_in_if(block: &Block, mut table: &mut HashMap<String, SemanticExp
         panic!("must return in if block");
     }
 
-    expr_list.into_iter().next().expect("failed to run handle_block_in_if")
+    expr_list
+        .into_iter()
+        .next()
+        .expect("failed to run handle_block_in_if")
 }
