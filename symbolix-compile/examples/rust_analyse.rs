@@ -2,27 +2,23 @@ use symbolix_compile::symbolix_rust;
 
 fn main() {
     let code = symbolix_rust! {
-        let y = var!("x", f64);
-
-
-        // z = var!("z", i32);
-
-        let expr = expr!("z + 2");
+        let y = var!("z", f64);
 
         let expr = if y >= 10 {
-            expr!("z + 2 * 10")
+            expr!("z - 2 * 10")
         } else {
             expr!("z * 2")
         };
 
         let expr = expr + y;
 
-        // let equation = expr.equal_to(y);
+        let equation = expr.equal_to(y);
 
-        // let result = equation.solve();
+        let result = equation.solve();
 
-        (expr, y)
+        (result, y)
+        // result
     };
 
-    println!("{}", code.calculate(10.0, 5.0).0);
+    println!("{}", code.calculate(2.0).0);
 }

@@ -5,7 +5,7 @@ use symbolix_core::{
 
 fn main() {
     new_compile_context! {
-        let expr_str = "3 * (x - 2) / 4 + 2 * (5 * x - (3 * x - 1)) / 3 == (1 - x) / 6 + 2";
+        let expr_str = "(z > 10 ? 2 * z - 20 : 3 * z) == z";
 
         let mut lexer = Lexer::new(&expr_str);
         let expression = Parser::pratt(&mut lexer);

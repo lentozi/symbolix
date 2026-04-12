@@ -11,6 +11,7 @@ pub enum SolveError {
     NonPolynomialExpression,
     ExpectedUniqueSolutionSet,
     ExpectedUnconditionalSolution,
+    UnsupportedSolutionSetExpression,
     VerificationFailed,
 }
 
@@ -35,6 +36,9 @@ impl fmt::Display for SolveError {
             SolveError::ExpectedUniqueSolutionSet => write!(f, "expected a unique solution"),
             SolveError::ExpectedUnconditionalSolution => {
                 write!(f, "expected an unconditional solution")
+            }
+            SolveError::UnsupportedSolutionSetExpression => {
+                write!(f, "solution set cannot be represented as a numeric expression")
             }
             SolveError::VerificationFailed => write!(f, "failed to verify solver output"),
         }

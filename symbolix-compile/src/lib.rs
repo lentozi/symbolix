@@ -4,6 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use symbolix_core::{
     lexer::Lexer, new_compile_context, optimizer::optimize, parser::Parser,
+    equation::SolutionSet,
     semantic::semantic_ir::SemanticExpression,
 };
 use syn::{parse_macro_input, LitStr};
@@ -14,11 +15,17 @@ mod codegen;
 mod rust_expr;
 
 use crate::codegen::{
-    generate_struct, get_func_arguments, get_func_return_type, multi_codegen_semantic,
+    codegen_value, generate_struct, get_func_arguments, get_func_return_type, multi_codegen_values,
 };
 use crate::rust_expr::convert_block;
 use quote::quote;
 use symbolix_core::semantic::Analyzer;
+
+#[derive(Debug, Clone)]
+pub(crate) enum CompileValue {
+    Semantic(SemanticExpression),
+    SolutionSet(SolutionSet),
+}
 
 #[proc_macro]
 pub fn compile(input: TokenStream) -> TokenStream {
@@ -34,8 +41,9 @@ pub fn compile(input: TokenStream) -> TokenStream {
         optimize(&mut semantic_expression);
         let code = codegen_semantic(&semantic_expression);
 
-        let (var_names, var_types) = get_func_arguments();
-        let return_type = get_func_return_type(&semantic_expression);
+        let compiled_value = CompileValue::Semantic(semantic_expression.clone());
+        let (var_names, var_types) = get_func_arguments(&[compiled_value.clone()]);
+        let return_type = get_func_return_type(&compiled_value);
 
         generate_struct(var_names, var_types, return_type, code).into()
     }
@@ -62,17 +70,19 @@ pub fn symbolix_rust(input: TokenStream) -> TokenStream {
         let block: syn::Block = syn::parse2(wrapped).unwrap();
 
         // 创建变量表和表达式表
-        let mut expr_table: HashMap<String, SemanticExpression> = HashMap::new();
-        let (expr_list, return_name_list): (Vec<SemanticExpression>, Vec<Ident>) = convert_block(&block, &mut expr_table);
+        let mut expr_table: HashMap<String, CompileValue> = HashMap::new();
+        let (expr_list, return_name_list): (Vec<CompileValue>, Vec<Ident>) = convert_block(&block, &mut expr_table);
+
+        let (var_names, var_types) = get_func_arguments(&expr_list);
 
         let (code, return_type): (proc_macro2::TokenStream, proc_macro2::TokenStream) = if expr_list.len() == 1 {
             let expr = expr_list.into_iter().next().unwrap();
-            let code = codegen_semantic(&expr);
+            let code = codegen_value(&expr);
 
             let return_type = get_func_return_type(&expr);
             (code, return_type)
         } else {
-            let code = multi_codegen_semantic(&expr_list, &return_name_list);
+            let code = multi_codegen_values(&expr_list, &return_name_list);
 
             let return_types = expr_list
                     .iter()
@@ -85,8 +95,6 @@ pub fn symbolix_rust(input: TokenStream) -> TokenStream {
 
             (code, return_type)
         };
-
-        let (var_names, var_types) = get_func_arguments();
 
         generate_struct(var_names, var_types, return_type, code).into()
     }

@@ -157,6 +157,42 @@ impl SolutionSet {
             .iter()
             .any(|branch| matches!(branch.result, BranchResult::Identity))
     }
+
+    pub fn into_numeric_expression(self) -> Result<NumericExpression, SolveError> {
+        if self.branches.is_empty() {
+            return Ok(NumericExpression::piecewise(
+                Vec::new(),
+                None,
+            ));
+        }
+
+        if self.branches.len() == 1
+            && self.branches[0].constraint == LogicalExpression::constant(true)
+        {
+            return match self.branches.into_iter().next().unwrap().result {
+                BranchResult::Finite(solutions) if solutions.len() == 1 => {
+                    Ok(solutions.into_iter().next().unwrap())
+                }
+                _ => Err(SolveError::UnsupportedSolutionSetExpression),
+            };
+        }
+
+        let mut cases = Vec::new();
+        for branch in self.branches {
+            match branch.result {
+                BranchResult::Finite(mut solutions) if solutions.len() == 1 => {
+                    cases.push((branch.constraint, solutions.remove(0)));
+                }
+                BranchResult::Finite(solutions) if solutions.is_empty() => {}
+                _ => return Err(SolveError::UnsupportedSolutionSetExpression),
+            }
+        }
+
+        Ok(NumericExpression::piecewise(
+            cases,
+            None,
+        ))
+    }
 }
 
 impl SolutionBranch {
@@ -674,3 +710,4 @@ fn simplify_numeric(expr: NumericExpression) -> NumericExpression {
         },
     }
 }
+
