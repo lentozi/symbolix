@@ -410,6 +410,65 @@ impl NumericExpression {
 
     /// 规约表达式
     pub fn factor(&mut self) {}
+
+    pub fn substitute(
+        &self,
+        target: &crate::semantic::variable::Variable,
+        replacement: Option<&NumericExpression>,
+    ) -> NumericExpression {
+        match self {
+            NumericExpression::Constant(_) => self.clone(),
+            NumericExpression::Variable(variable) => {
+                if variable == target {
+                    replacement.cloned().unwrap_or_else(|| self.clone())
+                } else {
+                    self.clone()
+                }
+            }
+            NumericExpression::Negation(inner) => {
+                NumericExpression::negation(&inner.substitute(target, replacement))
+            }
+            NumericExpression::Addition(bucket) => {
+                let mut iter = bucket.iter().map(|expr| expr.substitute(target, replacement));
+                match iter.next() {
+                    Some(first) => iter.fold(first, |acc, expr| acc + expr),
+                    None => NumericExpression::constant(Number::integer(0)),
+                }
+            }
+            NumericExpression::Multiplication(bucket) => {
+                let mut iter = bucket.iter().map(|expr| expr.substitute(target, replacement));
+                match iter.next() {
+                    Some(first) => iter.fold(first, |acc, expr| acc * expr),
+                    None => NumericExpression::constant(Number::integer(1)),
+                }
+            }
+            NumericExpression::Power { base, exponent } => NumericExpression::power(
+                &base.substitute(target, replacement),
+                &exponent.substitute(target, replacement),
+            ),
+            NumericExpression::Piecewise { cases, otherwise } => NumericExpression::piecewise(
+                cases
+                    .iter()
+                    .map(|(condition, expr)| {
+                        (
+                            condition.substitute(
+                                target,
+                                replacement.map(|expr| {
+                                    crate::semantic::semantic_ir::SemanticExpression::numeric(
+                                        expr.clone(),
+                                    )
+                                }).as_ref(),
+                            ),
+                            expr.substitute(target, replacement),
+                        )
+                    })
+                    .collect(),
+                otherwise
+                    .as_ref()
+                    .map(|expr| expr.substitute(target, replacement)),
+            ),
+        }
+    }
 }
 
 impl_numeric_ir_unary_operation!(Neg, neg, negation);

@@ -2,7 +2,10 @@ use crate::lexer::symbol::{Relation, Symbol};
 use crate::semantic::bucket::LogicalBucket;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::variable::Variable;
-use crate::{impl_logic_ir_binary_operation, impl_logic_ir_logic_operation, impl_logic_ir_unary_operation, logical_bucket};
+use crate::{
+    impl_logic_ir_binary_operation, impl_logic_ir_logic_operation, impl_logic_ir_unary_operation,
+    logical_bucket,
+};
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{BitAnd, BitOr, Not};
@@ -152,10 +155,98 @@ impl LogicalExpression {
         operator: &Symbol,
         right: &NumericExpression,
     ) -> LogicalExpression {
+        if let (NumericExpression::Constant(left_num), NumericExpression::Constant(right_num)) =
+            (left, right)
+        {
+            let left = left_num.to_float();
+            let right = right_num.to_float();
+
+            let result = match operator {
+                Symbol::Relation(Relation::Equal) => (left - right).abs() < 1e-9,
+                Symbol::Relation(Relation::NotEqual) => (left - right).abs() >= 1e-9,
+                Symbol::Relation(Relation::LessThan) => left < right,
+                Symbol::Relation(Relation::GreaterThan) => left > right,
+                Symbol::Relation(Relation::LessEqual) => left <= right,
+                Symbol::Relation(Relation::GreaterEqual) => left >= right,
+                _ => false,
+            };
+
+            return LogicalExpression::Constant(result);
+        }
+
         LogicalExpression::Relation {
             left: Box::new(left.clone()),
             operator: operator.clone(),
             right: Box::new(right.clone()),
+        }
+    }
+
+    pub fn substitute(
+        &self,
+        target: &Variable,
+        replacement: Option<&crate::semantic::semantic_ir::SemanticExpression>,
+    ) -> LogicalExpression {
+        match self {
+            LogicalExpression::Constant(_) => self.clone(),
+            LogicalExpression::Variable(variable) => {
+                if variable == target {
+                    match replacement {
+                        Some(crate::semantic::semantic_ir::SemanticExpression::Logical(
+                            logical,
+                        )) => logical.clone(),
+                        Some(crate::semantic::semantic_ir::SemanticExpression::Numeric(_)) => {
+                            panic!("cannot substitute a logical variable with a numeric expression")
+                        }
+                        None => self.clone(),
+                    }
+                } else {
+                    self.clone()
+                }
+            }
+            LogicalExpression::Not(inner) => {
+                LogicalExpression::not(&inner.substitute(target, replacement))
+            }
+            LogicalExpression::And(bucket) => {
+                let mut iter = bucket
+                    .iter()
+                    .map(|expr| expr.substitute(target, replacement));
+                match iter.next() {
+                    Some(first) => iter.fold(first, |acc, expr| acc & expr),
+                    None => LogicalExpression::constant(true),
+                }
+            }
+            LogicalExpression::Or(bucket) => {
+                let mut iter = bucket
+                    .iter()
+                    .map(|expr| expr.substitute(target, replacement));
+                match iter.next() {
+                    Some(first) => iter.fold(first, |acc, expr| acc | expr),
+                    None => LogicalExpression::constant(false),
+                }
+            }
+            LogicalExpression::Relation {
+                left,
+                operator,
+                right,
+            } => {
+                let numeric_replacement = match replacement {
+                    Some(crate::semantic::semantic_ir::SemanticExpression::Numeric(numeric)) => {
+                        Some(numeric)
+                    }
+                    Some(crate::semantic::semantic_ir::SemanticExpression::Logical(_))
+                        if target.var_type != crate::semantic::variable::VariableType::Boolean =>
+                    {
+                        panic!("cannot substitute a numeric variable with a logical expression")
+                    }
+                    _ => None,
+                };
+
+                LogicalExpression::relation(
+                    &left.substitute(target, numeric_replacement),
+                    operator,
+                    &right.substitute(target, numeric_replacement),
+                )
+            }
         }
     }
 }

@@ -60,6 +60,20 @@ impl Variable {
     pub fn set_value(&mut self, value: Constant) {
         self.value = Some(value.clone());
     }
+
+    pub fn substitute(
+        &self,
+        target: &Variable,
+        replacement: Option<&SemanticExpression>,
+    ) -> SemanticExpression {
+        if self != target {
+            return self.to_expression();
+        }
+
+        replacement
+            .cloned()
+            .unwrap_or_else(|| self.to_expression())
+    }
 }
 
 impl fmt::Display for Variable {

@@ -138,6 +138,28 @@ impl SemanticExpression {
     pub fn one() -> SemanticExpression {
         SemanticExpression::Numeric(Constant(Number::Integer(1)))
     }
+
+    pub fn substitute(
+        &self,
+        target: &crate::semantic::variable::Variable,
+        replacement: Option<&SemanticExpression>,
+    ) -> SemanticExpression {
+        match self {
+            SemanticExpression::Numeric(expr) => match replacement {
+                Some(SemanticExpression::Numeric(numeric)) => {
+                    SemanticExpression::numeric(expr.substitute(target, Some(numeric)))
+                }
+                Some(SemanticExpression::Logical(_)) if target.var_type != crate::semantic::variable::VariableType::Boolean => {
+                    panic!("cannot substitute a numeric variable with a logical expression")
+                }
+                Some(SemanticExpression::Logical(_)) => self.clone(),
+                None => SemanticExpression::numeric(expr.substitute(target, None)),
+            },
+            SemanticExpression::Logical(expr) => {
+                SemanticExpression::logical(expr.substitute(target, replacement))
+            }
+        }
+    }
 }
 
 impl SemanticExpression {

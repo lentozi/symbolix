@@ -1,5 +1,8 @@
 use crate::{
-    lexer::constant::Number,
+    lexer::{
+        constant::Number,
+        symbol::{Relation, Symbol},
+    },
     semantic::semantic_ir::{
         logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
     },
@@ -99,12 +102,31 @@ pub fn normalize_logic(expr: &mut LogicalExpression) {
         }
         LogicalExpression::Relation {
             left,
-            operator: _,
+            operator,
             right,
         } => {
             normalize_numeric(left);
             normalize_numeric(right);
+            if let (NumericExpression::Constant(left_num), NumericExpression::Constant(right_num)) =
+                (left.as_ref(), right.as_ref())
+            {
+                *expr = LogicalExpression::Constant(compare_relation(left_num, operator, right_num));
+            }
         }
         _ => {}
+    }
+}
+
+fn compare_relation(left: &Number, operator: &Symbol, right: &Number) -> bool {
+    let left = left.to_float();
+    let right = right.to_float();
+    match operator {
+        Symbol::Relation(Relation::Equal) => (left - right).abs() < 1e-9,
+        Symbol::Relation(Relation::NotEqual) => (left - right).abs() >= 1e-9,
+        Symbol::Relation(Relation::LessThan) => left < right,
+        Symbol::Relation(Relation::GreaterThan) => left > right,
+        Symbol::Relation(Relation::LessEqual) => left <= right,
+        Symbol::Relation(Relation::GreaterEqual) => left >= right,
+        _ => false,
     }
 }
