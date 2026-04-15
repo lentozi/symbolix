@@ -17,8 +17,8 @@
 - 优化：包含常量折叠、扁平化、规范化等优化步骤
 - 方程能力：支持单变量一次方程求解
 - 编译期代码生成：
-  - `compile!`：从表达式字符串生成可调用对象
-  - `symbolix_rust!`：从块状 DSL 生成可调用对象
+  - `formula!`：从表达式字符串生成可调用对象
+  - `symbolix!`：从块状 DSL 生成可调用对象
 
 ## Workspace 结构
 
@@ -27,7 +27,7 @@
   - 包含 `lexer`、`parser`、`semantic`、`optimizer`、`equation`、`context` 等模块
 - `symbolix-compile/`
   - `proc-macro` crate
-  - 提供 `compile!` 和 `symbolix_rust!`
+  - 提供 `formula!` 和 `symbolix!`
 - `examples/`
   - 顶层示例，演示如何直接使用编译期宏
 - `src/lib.rs`
@@ -144,9 +144,9 @@ fn main() {
 - 只支持单变量一次方程
 - 幂、多变量方程和更复杂的分段方程暂未支持
 
-## 使用 `compile!`
+## 使用 `formula!`
 
-`compile!` 会在编译期解析和优化表达式，并返回一个匿名对象。该对象当前至少包含：
+`formula!` 会在编译期解析和优化表达式，并返回一个匿名对象。该对象当前至少包含：
 
 - `calculate(...)`
 - `to_closure()`
@@ -154,15 +154,15 @@ fn main() {
 示例：
 
 ```rust
-use symbolix_compile::compile;
+use symbolix_compile::formula;
 
 fn main() {
-    let formula = compile!("y + x * 2");
+    let formula = formula!("y + x * 2");
 
     // 参数顺序按变量名字母序排列，这里是 (x, y)
     println!("{}", formula.calculate(3.0, 10.0));
 
-    let gt = compile!("x > 100");
+    let gt = formula!("x > 100");
     println!("{}", gt.calculate(120.0));
 }
 ```
@@ -173,17 +173,17 @@ fn main() {
 - 数值表达式返回 `f64`
 - 逻辑表达式返回 `bool`
 
-## 使用 `symbolix_rust!`
+## 使用 `symbolix!`
 
-`symbolix_rust!` 提供了一个更接近 Rust 代码风格的块状 DSL，适合把多个中间表达式组合起来并在最后返回一个表达式或元组。
+`symbolix!` 提供了一个更接近 Rust 代码风格的块状 DSL，适合把多个中间表达式组合起来并在最后返回一个表达式或元组。
 
 示例：
 
 ```rust
-use symbolix_compile::symbolix_rust;
+use symbolix_compile::symbolix;
 
 fn main() {
-    let code = symbolix_rust! {
+    let code = symbolix! {
         let x = var!("x", f64);
         let z = var!("z", f64);
 
@@ -218,9 +218,9 @@ fn main() {
 - `symbolix-core/examples/error.rs`
   - 演示错误输入的处理方式
 - `symbolix-compile/examples/main.rs`
-  - 演示 `compile!`
+  - 演示 `formula!`
 - `symbolix-compile/examples/rust_analyse.rs`
-  - 演示 `symbolix_rust!`
+  - 演示 `symbolix!`
 - `examples/workspace_demo.rs`
   - 顶层入口示例
 
@@ -234,3 +234,5 @@ fn main() {
 ## 许可证
 
 本项目采用 MIT 许可证，详见根目录中的 `LICENSE` 文件。
+
+

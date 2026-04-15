@@ -93,7 +93,6 @@ fn collect_logical_variables(expr: &LogicalExpression, variables: &mut Vec<Varia
 }
 
 fn collect_solution_set_variables(solution_set: &SolutionSet, variables: &mut Vec<Variable>) {
-    push_variable(&solution_set.target, variables);
     for branch in &solution_set.branches {
         collect_logical_variables(&branch.constraint, variables);
         if let BranchResult::Finite(solutions) = &branch.result {
@@ -606,4 +605,34 @@ fn test_codegen_arithmetic() {
 
         println!("{}", expanded.to_string());
     }
+}
+
+#[test]
+fn solution_set_arguments_do_not_include_target_variable() {
+    let x = Variable {
+        name: "x".to_string(),
+        var_type: VariableType::Float,
+        value: None,
+    };
+    let a = Variable {
+        name: "a".to_string(),
+        var_type: VariableType::Float,
+        value: None,
+    };
+
+    let solution_set = SolutionSet {
+        target: x,
+        branches: vec![SolutionBranch {
+            constraint: LogicalExpression::relation(
+                &NumericExpression::variable(a.clone()),
+                &Symbol::Relation(Relation::GreaterThan),
+                &NumericExpression::constant(Number::integer(0)),
+            ),
+            result: BranchResult::Finite(vec![NumericExpression::constant(Number::integer(1))]),
+        }],
+    };
+
+    let (names, _) = get_func_arguments(&[CompileValue::SolutionSet(solution_set)]);
+    let names = names.into_iter().map(|ident| ident.to_string()).collect::<Vec<_>>();
+    assert_eq!(names, vec!["a".to_string()]);
 }

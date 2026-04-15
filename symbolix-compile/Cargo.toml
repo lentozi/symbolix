@@ -11,3 +11,6 @@ syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 symbolix-core = { path = "../symbolix-core" }
+
+[dev-dependencies]
+trybuild = "1.0"

@@ -1,7 +1,7 @@
-use symbolix_compile::symbolix_rust;
+use symbolix_compile::symbolix;
 
 fn main() {
-    let code = symbolix_rust! {
+    let code = symbolix! {
         let y = var!("z", f64);
 
         let expr = if y >= 10 {
