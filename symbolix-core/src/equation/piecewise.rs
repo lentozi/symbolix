@@ -1,7 +1,8 @@
 //! 分段方程求解模块
 
 use crate::{
-    equation::{optimize_numeric, Equation, SolveError},
+    equation::{Equation, SolveError},
+    optimizer::normalize_numeric,
     semantic::semantic_ir::{logic::LogicalExpression, numeric::NumericExpression},
 };
 
@@ -15,7 +16,11 @@ impl PiecewiseSolver {
             .into_iter()
             .map(|(constraint, expr)| Equation {
                 expr: NumericExpression::Piecewise {
-                    cases: vec![(constraint, optimize_numeric(expr))],
+                    cases: vec![({
+                        let mut expr = expr;
+                        normalize_numeric(&mut expr);
+                        (constraint, expr)
+                    })],
                     otherwise: None,
                 },
                 solve_for: equation.solve_for.clone(),
@@ -42,7 +47,11 @@ fn expand_numeric(expr: &NumericExpression) -> Vec<(LogicalExpression, NumericEx
         }
         NumericExpression::Negation(inner) => expand_numeric(inner)
             .into_iter()
-            .map(|(constraint, expr)| (constraint, optimize_numeric(-expr)))
+            .map(|(constraint, expr)| {
+                let mut expr = -expr;
+                normalize_numeric(&mut expr);
+                (constraint, expr)
+            })
             .collect(),
         NumericExpression::Addition(bucket) => combine_branches(
             bucket.iter().map(|expr| expand_numeric(&expr)).collect(),
@@ -51,7 +60,9 @@ fn expand_numeric(expr: &NumericExpression) -> Vec<(LogicalExpression, NumericEx
                     NumericExpression::constant(crate::lexer::constant::Number::integer(0)),
                     |acc, expr| acc + expr,
                 );
-                optimize_numeric(expr)
+                let mut expr = expr;
+                normalize_numeric(&mut expr);
+                expr
             },
         ),
         NumericExpression::Multiplication(bucket) => combine_branches(
@@ -61,7 +72,9 @@ fn expand_numeric(expr: &NumericExpression) -> Vec<(LogicalExpression, NumericEx
                     NumericExpression::constant(crate::lexer::constant::Number::integer(1)),
                     |acc, expr| acc * expr,
                 );
-                optimize_numeric(expr)
+                let mut expr = expr;
+                normalize_numeric(&mut expr);
+                expr
             },
         ),
         NumericExpression::Power { base, exponent } => {
@@ -70,7 +83,11 @@ fn expand_numeric(expr: &NumericExpression) -> Vec<(LogicalExpression, NumericEx
                 for (exp_constraint, exp_expr) in expand_numeric(exponent) {
                     branches.push((
                         LogicalExpression::and(&base_constraint, &exp_constraint),
-                        optimize_numeric(NumericExpression::power(&base_expr, &exp_expr)),
+                        {
+                            let mut expr = NumericExpression::power(&base_expr, &exp_expr);
+                            normalize_numeric(&mut expr);
+                            expr
+                        },
                     ));
                 }
             }

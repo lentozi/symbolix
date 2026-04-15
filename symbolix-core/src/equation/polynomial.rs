@@ -1,9 +1,10 @@
 use crate::{
     equation::{
-        contains_target, is_zero, optimize_numeric, piecewise::split_branch_equation,
+        contains_target, is_zero, piecewise::split_branch_equation,
         Equation, SolutionBranch, SolutionSet, SolveError, Solver,
     },
     lexer::constant::Number,
+    optimizer::normalize_numeric,
     semantic::{semantic_ir::numeric::NumericExpression, variable::Variable},
 };
 
@@ -41,30 +42,45 @@ impl Solver for PolynomialSolver {
             return Err(SolveError::NonPolynomialExpression);
         }
 
-        let discriminant = optimize_numeric(
-            b.clone() * b.clone()
-                - NumericExpression::constant(Number::integer(4)) * a.clone() * c.clone(),
-        );
+        let mut discriminant = b.clone() * b.clone()
+            - NumericExpression::constant(Number::integer(4)) * a.clone() * c.clone();
+        normalize_numeric(&mut discriminant);
 
-        let two_a = optimize_numeric(NumericExpression::constant(Number::integer(2)) * a.clone());
-        let minus_b = optimize_numeric(-b);
+        let mut two_a = NumericExpression::constant(Number::integer(2)) * a.clone();
+        normalize_numeric(&mut two_a);
+        let mut minus_b = -b;
+        normalize_numeric(&mut minus_b);
 
         let branches = if is_zero(&discriminant) {
             vec![SolutionBranch::finite(
                 constraint,
-                vec![optimize_numeric(minus_b / two_a)],
+                vec![{
+                    let mut expr = minus_b / two_a;
+                    normalize_numeric(&mut expr);
+                    expr
+                }],
             )]
         } else {
-            let sqrt_discriminant = optimize_numeric(NumericExpression::power(
+            let mut sqrt_discriminant = NumericExpression::power(
                 &discriminant,
                 &NumericExpression::constant(Number::fraction(1, 2)),
-            ));
+            );
+            normalize_numeric(&mut sqrt_discriminant);
 
             vec![SolutionBranch::finite(
                 constraint,
                 vec![
-                    optimize_numeric((minus_b.clone() + sqrt_discriminant.clone()) / two_a.clone()),
-                    optimize_numeric((minus_b - sqrt_discriminant) / two_a),
+                    {
+                        let mut expr =
+                            (minus_b.clone() + sqrt_discriminant.clone()) / two_a.clone();
+                        normalize_numeric(&mut expr);
+                        expr
+                    },
+                    {
+                        let mut expr = (minus_b - sqrt_discriminant) / two_a;
+                        normalize_numeric(&mut expr);
+                        expr
+                    },
                 ],
             )]
         };
@@ -122,7 +138,11 @@ fn extract_polynomial(
         NumericExpression::Negation(inner) => Some(
             extract_polynomial(inner, target, max_degree)?
                 .into_iter()
-                .map(|coef| optimize_numeric(-coef))
+                .map(|coef| {
+                    let mut coef = -coef;
+                    normalize_numeric(&mut coef);
+                    coef
+                })
                 .collect(),
         ),
         NumericExpression::Addition(bucket) => {
@@ -185,7 +205,8 @@ fn add_coefficients(
             .get(degree)
             .cloned()
             .unwrap_or_else(|| NumericExpression::constant(Number::integer(0)));
-        result[degree] = optimize_numeric(left_coef + right_coef);
+        result[degree] = left_coef + right_coef;
+        normalize_numeric(&mut result[degree]);
     }
     trim_coefficients(result)
 }
@@ -208,7 +229,8 @@ fn multiply_coefficients(
             if degree > max_degree {
                 return None;
             }
-            result[degree] = optimize_numeric(result[degree].clone() + left_coef.clone() * right_coef);
+            result[degree] = result[degree].clone() + left_coef.clone() * right_coef;
+            normalize_numeric(&mut result[degree]);
         }
     }
     Some(trim_coefficients(result))

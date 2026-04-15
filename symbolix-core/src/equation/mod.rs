@@ -12,18 +12,25 @@ pub use polynomial::{PolynomialForm, PolynomialSolver};
 use crate::{
     lexer::constant::Number,
     lexer::symbol::{Relation, Symbol},
-    optimizer::optimize,
+    optimizer::{normalize_logic, normalize_numeric},
     semantic::{
         semantic_ir::{logic::LogicalExpression, numeric::NumericExpression, SemanticExpression},
         variable::Variable,
     },
 };
 use piecewise::PiecewiseSolver;
-use std::{fmt, panic::{catch_unwind, AssertUnwindSafe}};
+use std::{
+    collections::HashMap,
+    fmt,
+    panic::{catch_unwind, AssertUnwindSafe},
+};
 
+/// 方程结构体
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Equation {
+    /// 方程左侧表达式，expr == 0
     pub expr: NumericExpression,
+    /// 该方程的未知变量
     pub solve_for: Variable,
 }
 
@@ -39,9 +46,12 @@ pub struct SolutionBranch {
     pub result: BranchResult,
 }
 
+/// 关系表达式的解类型
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BranchResult {
+    /// 有穷解
     Finite(Vec<NumericExpression>),
+    /// 全解，表示关系恒成立
     Identity,
 }
 
@@ -64,7 +74,7 @@ impl Equation {
         };
 
         Ok(Self {
-            expr: optimize_numeric(expr),
+            expr,
             solve_for,
         })
     }
@@ -118,7 +128,9 @@ impl Equation {
             }
         }
 
-        Ok(SolutionSet::new(self.solve_for.clone(), branches))
+        Ok(SolutionSet::new(self.solve_for.clone(), branches)
+            .substitute_into_constraints()
+            .merge_by_constraint())
     }
 
     /// 求解方程，返回唯一解的 SemanticExpression，要求方程有且仅有一个解
@@ -144,26 +156,27 @@ impl Equation {
 }
 
 impl SolutionSet {
+    /// 构造解集对象
     pub fn new(target: Variable, branches: Vec<SolutionBranch>) -> Self {
         Self { target, branches }
     }
 
+    /// 判断解集是否为空
     pub fn is_empty(&self) -> bool {
         self.branches.is_empty()
     }
 
+    /// 判断解集中是否有全解
     pub fn has_identity_branch(&self) -> bool {
         self.branches
             .iter()
             .any(|branch| matches!(branch.result, BranchResult::Identity))
     }
 
+    /// 将解集转换为 NumericExpression ，要求单段函数内的解唯一
     pub fn into_numeric_expression(self) -> Result<NumericExpression, SolveError> {
         if self.branches.is_empty() {
-            return Ok(NumericExpression::piecewise(
-                Vec::new(),
-                None,
-            ));
+            return Ok(NumericExpression::piecewise(Vec::new(), None));
         }
 
         if self.branches.len() == 1
@@ -188,14 +201,91 @@ impl SolutionSet {
             }
         }
 
-        Ok(NumericExpression::piecewise(
-            cases,
-            None,
-        ))
+        Ok(NumericExpression::piecewise(cases, None))
+    }
+
+    pub fn simplify(&self) -> Self {
+        self.substitute_into_constraints().merge_by_constraint()
+    }
+
+    pub fn substitute_into_constraints(&self) -> Self {
+        let mut branches = Vec::new();
+
+        for branch in &self.branches {
+            match &branch.result {
+                BranchResult::Finite(solutions) => {
+                    for solution in solutions {
+                        let constraint =
+                            {
+                                let mut constraint = branch.constraint.substitute(
+                                    &self.target,
+                                    Some(&SemanticExpression::numeric(solution.clone())),
+                                );
+                                normalize_logic(&mut constraint);
+                                constraint
+                            };
+
+                        if constraint == LogicalExpression::constant(false) {
+                            continue;
+                        }
+
+                        branches.push(SolutionBranch::finite(constraint, vec![solution.clone()]));
+                    }
+                }
+                BranchResult::Identity => {
+                    let constraint = {
+                        let mut constraint = branch.constraint.clone();
+                        normalize_logic(&mut constraint);
+                        constraint
+                    };
+                    if constraint != LogicalExpression::constant(false) {
+                        branches.push(SolutionBranch::identity(constraint));
+                    }
+                }
+            }
+        }
+
+        SolutionSet::new(self.target.clone(), branches)
+    }
+
+    pub fn merge_by_constraint(&self) -> Self {
+        let mut finite_groups: HashMap<LogicalExpression, Vec<NumericExpression>> = HashMap::new();
+        let mut identity_constraints = Vec::new();
+
+        for branch in &self.branches {
+            match &branch.result {
+                BranchResult::Finite(solutions) => {
+                    finite_groups
+                        .entry(branch.constraint.clone())
+                        .or_default()
+                        .extend(solutions.iter().cloned());
+                }
+                BranchResult::Identity => {
+                    if !identity_constraints.contains(&branch.constraint) {
+                        identity_constraints.push(branch.constraint.clone());
+                    }
+                }
+            }
+        }
+
+        let mut branches = identity_constraints
+            .into_iter()
+            .map(SolutionBranch::identity)
+            .collect::<Vec<_>>();
+
+        for (constraint, solutions) in finite_groups {
+            let branch = SolutionBranch::finite(constraint, solutions);
+            if !matches!(branch.result, BranchResult::Finite(ref values) if values.is_empty()) {
+                branches.push(branch);
+            }
+        }
+
+        SolutionSet::new(self.target.clone(), branches)
     }
 }
 
 impl SolutionBranch {
+    /// 构造有限解，在该条件下解为有限确定值
     pub fn finite(constraint: LogicalExpression, solutions: Vec<NumericExpression>) -> Self {
         Self {
             constraint,
@@ -203,6 +293,7 @@ impl SolutionBranch {
         }
     }
 
+    /// 构造任意解，在该条件下等式恒成立，任意值都是解
     pub fn identity(constraint: LogicalExpression) -> Self {
         Self {
             constraint,
@@ -263,28 +354,11 @@ impl fmt::Display for SolutionBranch {
     }
 }
 
-/// 优化 NumericExpression，返回优化后的 NumericExpression
-pub(crate) fn optimize_numeric(expr: NumericExpression) -> NumericExpression {
-    let fallback = expr.clone();
-    match catch_unwind(AssertUnwindSafe(|| {
-        let mut wrapped = SemanticExpression::numeric(expr);
-        optimize(&mut wrapped);
-        match wrapped {
-            SemanticExpression::Numeric(expr) => expr,
-            _ => unreachable!(),
-        }
-    })) {
-        Ok(expr) => expr,
-        Err(_) => simplify_numeric(fallback),
-    }
-}
-
 /// 判断 NumericExpression 是否为零
 pub(crate) fn is_zero(expr: &NumericExpression) -> bool {
-    matches!(
-        optimize_numeric(expr.clone()),
-        NumericExpression::Constant(number) if number.is_zero()
-    )
+    let mut expr = expr.clone();
+    normalize_numeric(&mut expr);
+    matches!(expr, NumericExpression::Constant(number) if number.is_zero())
 }
 
 /// 判断 NumericExpression 是否包含目标变量
@@ -367,6 +441,7 @@ fn collect_logical_variables(expr: &LogicalExpression, variables: &mut Vec<Varia
     }
 }
 
+/// 检查分支是否合法，
 fn verify_branch(
     target: &Variable,
     branch_expr: &NumericExpression,
@@ -383,7 +458,9 @@ fn verify_branch(
         BranchResult::Finite(solutions) => {
             let verified = solutions
                 .into_iter()
-                .filter(|solution| verify_solution(target, branch_expr, &branch.constraint, solution))
+                .filter(|solution| {
+                    verify_solution(target, branch_expr, &branch.constraint, solution)
+                })
                 .collect::<Vec<_>>();
             Ok(SolutionBranch::finite(branch.constraint, verified))
         }
@@ -396,8 +473,12 @@ fn verify_solution(
     constraint: &LogicalExpression,
     solution: &NumericExpression,
 ) -> bool {
-    let substituted = substitute_numeric(expr, target, solution);
-    let equation_holds = match catch_unwind(AssertUnwindSafe(|| optimize_numeric(substituted))) {
+    let substituted = expr.substitute(target, Some(solution));
+    let equation_holds = match catch_unwind(AssertUnwindSafe(|| {
+        let mut substituted = substituted;
+        normalize_numeric(&mut substituted);
+        substituted
+    })) {
         Ok(NumericExpression::Constant(number)) => {
             number.is_zero() || number.to_float().abs() < 1e-9
         }
@@ -405,104 +486,10 @@ fn verify_solution(
         Err(_) => true,
     };
 
-    equation_holds && logical_is_not_false(&substitute_logical(constraint, target, solution))
-}
-
-pub(crate) fn substitute_numeric(
-    expr: &NumericExpression,
-    target: &Variable,
-    replacement: &NumericExpression,
-) -> NumericExpression {
-    match expr {
-        NumericExpression::Constant(_) => expr.clone(),
-        NumericExpression::Variable(variable) => {
-            if variable == target {
-                replacement.clone()
-            } else {
-                expr.clone()
-            }
-        }
-        NumericExpression::Negation(inner) => optimize_numeric(-substitute_numeric(inner, target, replacement)),
-        NumericExpression::Addition(bucket) => {
-            let terms = bucket
-                .iter()
-                .map(|term| substitute_numeric(&term, target, replacement))
-                .collect::<Vec<_>>();
-            sum_numeric_terms(terms)
-        }
-        NumericExpression::Multiplication(bucket) => {
-            let factors = bucket
-                .iter()
-                .map(|factor| substitute_numeric(&factor, target, replacement))
-                .collect::<Vec<_>>();
-            multiply_numeric_terms(factors)
-        }
-        NumericExpression::Power { base, exponent } => optimize_numeric(NumericExpression::power(
-            &substitute_numeric(base, target, replacement),
-            &substitute_numeric(exponent, target, replacement),
-        )),
-        NumericExpression::Piecewise { cases, otherwise } => NumericExpression::Piecewise {
-            cases: cases
-                .iter()
-                .map(|(condition, expr)| {
-                    (
-                        substitute_logical(condition, target, replacement),
-                        substitute_numeric(expr, target, replacement),
-                    )
-                })
-                .collect(),
-            otherwise: otherwise
-                .as_ref()
-                .map(|expr| Box::new(substitute_numeric(expr, target, replacement))),
-        },
-    }
-}
-
-fn sum_numeric_terms(terms: Vec<NumericExpression>) -> NumericExpression {
-    let mut iter = terms.into_iter();
-    match iter.next() {
-        Some(first) => optimize_numeric(iter.fold(first, |acc, term| acc + term)),
-        None => NumericExpression::constant(Number::integer(0)),
-    }
-}
-
-fn multiply_numeric_terms(factors: Vec<NumericExpression>) -> NumericExpression {
-    let mut iter = factors.into_iter();
-    match iter.next() {
-        Some(first) => optimize_numeric(iter.fold(first, |acc, factor| acc * factor)),
-        None => NumericExpression::constant(Number::integer(1)),
-    }
-}
-
-
-fn substitute_logical(
-    expr: &LogicalExpression,
-    target: &Variable,
-    replacement: &NumericExpression,
-) -> LogicalExpression {
-    match expr {
-        LogicalExpression::Constant(_) | LogicalExpression::Variable(_) => expr.clone(),
-        LogicalExpression::Not(inner) => !substitute_logical(inner, target, replacement),
-        LogicalExpression::And(bucket) => bucket
-            .iter()
-            .fold(LogicalExpression::constant(true), |acc, term| {
-                LogicalExpression::and(&acc, &substitute_logical(&term, target, replacement))
-            }),
-        LogicalExpression::Or(bucket) => bucket
-            .iter()
-            .fold(LogicalExpression::constant(false), |acc, term| {
-                LogicalExpression::or(&acc, &substitute_logical(&term, target, replacement))
-            }),
-        LogicalExpression::Relation {
-            left,
-            operator,
-            right,
-        } => LogicalExpression::relation(
-            &substitute_numeric(left, target, replacement),
-            operator,
-            &substitute_numeric(right, target, replacement),
-        ),
-    }
+    equation_holds
+        && logical_is_not_false(
+            &constraint.substitute(target, Some(&SemanticExpression::numeric(solution.clone()))),
+        )
 }
 
 fn collect_domain_constraint(expr: &NumericExpression) -> LogicalExpression {
@@ -554,160 +541,20 @@ fn constraint_allows_identity(constraint: &LogicalExpression) -> bool {
 }
 
 fn logical_is_not_false(expr: &LogicalExpression) -> bool {
-    !matches!(simplify_logical(expr.clone()), LogicalExpression::Constant(false))
+    let mut expr = expr.clone();
+    normalize_logic(&mut expr);
+    !matches!(expr, LogicalExpression::Constant(false))
 }
 
-fn simplify_logical(expr: LogicalExpression) -> LogicalExpression {
-    match expr {
-        LogicalExpression::Constant(_) | LogicalExpression::Variable(_) => expr,
-        LogicalExpression::Not(inner) => match simplify_logical(*inner) {
-            LogicalExpression::Constant(value) => LogicalExpression::constant(!value),
-            simplified => LogicalExpression::Not(Box::new(simplified)),
-        },
-        LogicalExpression::And(bucket) => {
-            let mut terms = Vec::new();
-            for term in bucket.iter() {
-                match simplify_logical(term) {
-                    LogicalExpression::Constant(false) => return LogicalExpression::constant(false),
-                    LogicalExpression::Constant(true) => {}
-                    simplified => terms.push(simplified),
-                }
-            }
-            match terms.len() {
-                0 => LogicalExpression::constant(true),
-                1 => terms.into_iter().next().unwrap(),
-                _ => LogicalExpression::And(terms.into_iter().collect()),
-            }
-        }
-        LogicalExpression::Or(bucket) => {
-            let mut terms = Vec::new();
-            for term in bucket.iter() {
-                match simplify_logical(term) {
-                    LogicalExpression::Constant(true) => return LogicalExpression::constant(true),
-                    LogicalExpression::Constant(false) => {}
-                    simplified => terms.push(simplified),
-                }
-            }
-            match terms.len() {
-                0 => LogicalExpression::constant(false),
-                1 => terms.into_iter().next().unwrap(),
-                _ => LogicalExpression::Or(terms.into_iter().collect()),
-            }
-        }
-        LogicalExpression::Relation {
-            left,
-            operator,
-            right,
-        } => {
-            let left = optimize_numeric(*left);
-            let right = optimize_numeric(*right);
-            match (&left, &right) {
-                (NumericExpression::Constant(left), NumericExpression::Constant(right)) => {
-                    LogicalExpression::constant(compare_numbers(left, &operator, right))
-                }
-                _ => LogicalExpression::relation(&left, &operator, &right),
-            }
-        }
-    }
-}
-
-fn compare_numbers(left: &Number, operator: &Symbol, right: &Number) -> bool {
-    let left_value = left.to_float();
-    let right_value = right.to_float();
-    match operator {
-        Symbol::Relation(Relation::Equal) => (left_value - right_value).abs() < 1e-9,
-        Symbol::Relation(Relation::NotEqual) => (left_value - right_value).abs() >= 1e-9,
-        Symbol::Relation(Relation::LessThan) => left_value < right_value,
-        Symbol::Relation(Relation::GreaterThan) => left_value > right_value,
-        Symbol::Relation(Relation::LessEqual) => left_value <= right_value,
-        Symbol::Relation(Relation::GreaterEqual) => left_value >= right_value,
-        _ => false,
-    }
-}
-
+/// 对单段函数中的解去重
 fn dedup_solutions(solutions: Vec<NumericExpression>) -> Vec<NumericExpression> {
     let mut deduped = Vec::new();
     for solution in solutions {
-        let normalized = optimize_numeric(solution);
+        let mut normalized = solution;
+        normalize_numeric(&mut normalized);
         if !deduped.contains(&normalized) {
             deduped.push(normalized);
         }
     }
     deduped
 }
-
-fn simplify_numeric(expr: NumericExpression) -> NumericExpression {
-    match expr {
-        NumericExpression::Constant(_) | NumericExpression::Variable(_) => expr,
-        NumericExpression::Negation(inner) => match simplify_numeric(*inner) {
-            NumericExpression::Constant(number) => NumericExpression::constant(-number),
-            simplified => NumericExpression::Negation(Box::new(simplified)),
-        },
-        NumericExpression::Addition(bucket) => {
-            let mut constant = Number::integer(0);
-            let mut terms = Vec::new();
-            for term in bucket.iter() {
-                match simplify_numeric(term) {
-                    NumericExpression::Constant(number) => constant = constant + number,
-                    simplified => terms.push(simplified),
-                }
-            }
-            if !constant.is_zero() {
-                terms.insert(0, NumericExpression::constant(constant));
-            }
-            match terms.len() {
-                0 => NumericExpression::constant(Number::integer(0)),
-                1 => terms.into_iter().next().unwrap(),
-                _ => NumericExpression::Addition(terms.into_iter().collect()),
-            }
-        }
-        NumericExpression::Multiplication(bucket) => {
-            let mut constant = Number::integer(1);
-            let mut factors = Vec::new();
-            for factor in bucket.iter() {
-                match simplify_numeric(factor) {
-                    NumericExpression::Constant(number) => {
-                        if number.is_zero() {
-                            return NumericExpression::constant(Number::integer(0));
-                        }
-                        constant = constant * number;
-                    }
-                    simplified => factors.push(simplified),
-                }
-            }
-            if !constant.is_one() {
-                factors.insert(0, NumericExpression::constant(constant.clone()));
-            }
-            match factors.len() {
-                0 => NumericExpression::constant(constant),
-                1 if constant.is_one() => factors.into_iter().next().unwrap(),
-                _ => NumericExpression::Multiplication(factors.into_iter().collect()),
-            }
-        }
-        NumericExpression::Power { base, exponent } => {
-            let base = simplify_numeric(*base);
-            let exponent = simplify_numeric(*exponent);
-            match (&base, &exponent) {
-                (_, NumericExpression::Constant(number)) if number.is_zero() => {
-                    NumericExpression::constant(Number::integer(1))
-                }
-                (_, NumericExpression::Constant(number)) if number.is_one() => base,
-                (NumericExpression::Constant(left), NumericExpression::Constant(right)) => {
-                    NumericExpression::constant(Number::float(left.to_float().powf(right.to_float())))
-                }
-                _ => NumericExpression::Power {
-                    base: Box::new(base),
-                    exponent: Box::new(exponent),
-                },
-            }
-        }
-        NumericExpression::Piecewise { cases, otherwise } => NumericExpression::Piecewise {
-            cases: cases
-                .into_iter()
-                .map(|(condition, expr)| (condition, simplify_numeric(expr)))
-                .collect(),
-            otherwise: otherwise.map(|expr| Box::new(simplify_numeric(*expr))),
-        },
-    }
-}
-

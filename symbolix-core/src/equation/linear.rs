@@ -1,9 +1,10 @@
 use crate::{
     equation::{
-        contains_target, is_zero, optimize_numeric, piecewise::split_branch_equation, Equation,
+        contains_target, is_zero, piecewise::split_branch_equation, Equation,
         SolutionBranch, SolutionSet, SolveError, Solver,
     },
     lexer::constant::Number,
+    optimizer::normalize_numeric,
     semantic::{semantic_ir::numeric::NumericExpression, variable::Variable},
 };
 
@@ -19,10 +20,14 @@ pub struct LinearSolver;
 impl LinearForm {
     pub fn extract(expr: &NumericExpression, target: &Variable) -> Option<Self> {
         let (coef, constant) = extract_linear_parts(expr, target)?;
+        let mut coef = coef;
+        let mut constant = constant;
+        normalize_numeric(&mut coef);
+        normalize_numeric(&mut constant);
         Some(Self {
             target: target.clone(),
-            coef: optimize_numeric(coef),
-            constant: optimize_numeric(constant),
+            coef,
+            constant,
         })
     }
 }
@@ -46,7 +51,8 @@ impl Solver for LinearSolver {
                 Vec::new()
             }
         } else {
-            let solution = optimize_numeric(-linear.constant.clone() / linear.coef.clone());
+            let mut solution = -linear.constant.clone() / linear.coef.clone();
+            normalize_numeric(&mut solution);
             vec![SolutionBranch::finite(constraint, vec![solution])]
         };
 
@@ -69,15 +75,21 @@ fn extract_linear_parts(
         }
         NumericExpression::Negation(inner) => {
             let (coef, constant) = extract_linear_parts(inner, target)?;
-            Some((optimize_numeric(-coef), optimize_numeric(-constant)))
+            let mut coef = -coef;
+            let mut constant = -constant;
+            normalize_numeric(&mut coef);
+            normalize_numeric(&mut constant);
+            Some((coef, constant))
         }
         NumericExpression::Addition(bucket) => {
             let mut coef = zero();
             let mut constant = zero();
             for expr in bucket.iter() {
                 let (term_coef, term_constant) = extract_linear_parts(&expr, target)?;
-                coef = optimize_numeric(coef + term_coef);
-                constant = optimize_numeric(constant + term_constant);
+                coef = coef + term_coef;
+                constant = constant + term_constant;
+                normalize_numeric(&mut coef);
+                normalize_numeric(&mut constant);
             }
             Some((coef, constant))
         }
@@ -96,7 +108,11 @@ fn extract_linear_parts(
                 0 => {
                     let constant = bucket
                         .iter()
-                        .fold(one(), |acc, expr| optimize_numeric(acc * expr));
+                        .fold(one(), |acc, expr| {
+                            let mut value = acc * expr;
+                            normalize_numeric(&mut value);
+                            value
+                        });
                     Some((zero(), constant))
                 }
                 1 => {
@@ -109,12 +125,20 @@ fn extract_linear_parts(
 
                     let const_product = constants
                         .into_iter()
-                        .fold(one(), |acc, expr| optimize_numeric(acc * expr));
+                        .fold(one(), |acc, expr| {
+                            let mut value = acc * expr;
+                            normalize_numeric(&mut value);
+                            value
+                        });
 
                     let (coef, constant) = variable_forms[0];
+                    let mut new_coef = coef.clone() * const_product.clone();
+                    let mut new_constant = constant.clone() * const_product;
+                    normalize_numeric(&mut new_coef);
+                    normalize_numeric(&mut new_constant);
                     Some((
-                        optimize_numeric(coef.clone() * const_product.clone()),
-                        optimize_numeric(constant.clone() * const_product),
+                        new_coef,
+                        new_constant,
                     ))
                 }
                 _ => None,
