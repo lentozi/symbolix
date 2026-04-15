@@ -49,7 +49,6 @@
 
 - Rust stable（2021 edition）
 - `cargo`
-- 首次构建时需要拉取 Git 依赖 `tree-drawer`
 
 ## 快速开始
 

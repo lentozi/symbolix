@@ -1,26 +1,18 @@
-use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
-use quote::quote;
-use symbolix_core::{
-    lexer::Lexer, new_compile_context, optimizer::optimize, parser::Parser,
-    equation::SolutionSet,
-    semantic::semantic_ir::SemanticExpression,
-};
-use syn::{parse_macro_input, spanned::Spanned, LitStr};
 
-use crate::codegen::codegen_semantic;
-
+mod cache;
 mod codegen;
+mod expand;
 mod rust_expr;
 
-use crate::codegen::{
-    codegen_value, generate_struct, get_func_arguments, get_func_return_type, multi_codegen_values,
+use crate::cache::expand_with_cache;
+use crate::expand::{
+    compile_formula, compile_symbolix, normalize_formula_input, normalize_symbolix_input,
+    panic_to_compile_error,
 };
-use crate::rust_expr::convert_block;
-use symbolix_core::semantic::Analyzer;
+use symbolix_core::{equation::SolutionSet, semantic::semantic_ir::SemanticExpression};
 
 #[derive(Debug, Clone)]
 pub(crate) enum CompileValue {
@@ -31,23 +23,13 @@ pub(crate) enum CompileValue {
 #[proc_macro]
 pub fn formula(input: TokenStream) -> TokenStream {
     match catch_unwind(AssertUnwindSafe(|| {
-        new_compile_context! {
-            let input_lit = parse_macro_input!(input as LitStr);
-            let expr_str = input_lit.value();
+        let normalized_input = match normalize_formula_input(input.clone()) {
+            Ok(normalized) => normalized,
+            Err(err) => return err.to_compile_error().into(),
+        };
 
-            let mut lexer = Lexer::new(&expr_str);
-            let expression = Parser::pratt(&mut lexer);
-            let mut analyzer = Analyzer::new();
-            let mut semantic_expression = analyzer.analyze_with_ctx(&expression);
-            optimize(&mut semantic_expression);
-            let code = codegen_semantic(&semantic_expression);
-
-            let compiled_value = CompileValue::Semantic(semantic_expression.clone());
-            let (var_names, var_types) = get_func_arguments(&[compiled_value.clone()]);
-            let return_type = get_func_return_type(&compiled_value);
-
-            generate_struct(var_names, var_types, return_type, code).into()
-        }
+        expand_with_cache("formula", &normalized_input, || compile_formula(input))
+            .unwrap_or_else(|err| err.to_compile_error().into())
     })) {
         Ok(tokens) => tokens,
         Err(payload) => panic_to_compile_error(payload),
@@ -65,66 +47,11 @@ pub fn formula(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn symbolix(input: TokenStream) -> TokenStream {
     match catch_unwind(AssertUnwindSafe(|| {
-        let result: syn::Result<TokenStream> = new_compile_context! {
-            let input: proc_macro2::TokenStream = input.into();
-
-            let wrapped = quote::quote!({
-                #input
-            });
-
-            let block: syn::Block = syn::parse2(wrapped)?;
-
-            let mut expr_table: HashMap<String, CompileValue> = HashMap::new();
-            let (expr_list, return_name_list): (Vec<CompileValue>, Vec<Ident>) =
-                convert_block(&block, &mut expr_table)?;
-
-            let (var_names, var_types) = get_func_arguments(&expr_list);
-
-            let (code, return_type): (proc_macro2::TokenStream, proc_macro2::TokenStream) = if expr_list.len() == 1 {
-                let expr = expr_list.into_iter().next().ok_or_else(|| {
-                    syn::Error::new(block.span(), "symbolix! block must end with a return expression")
-                })?;
-                let code = codegen_value(&expr);
-
-                let return_type = get_func_return_type(&expr);
-                (code, return_type)
-            } else {
-                let code = multi_codegen_values(&expr_list, &return_name_list);
-
-                let return_types = expr_list
-                        .iter()
-                        .map(get_func_return_type)
-                        .collect::<Vec<_>>();
-
-                let return_type = quote! {
-                    ( #(#return_types),* )
-                };
-
-                (code, return_type)
-            };
-
-            Ok(generate_struct(var_names, var_types, return_type, code).into())
-        };
-
-        result.unwrap_or_else(|err| err.to_compile_error().into())
+        let normalized_input = normalize_symbolix_input(input.clone());
+        expand_with_cache("symbolix", &normalized_input, || compile_symbolix(input))
+            .unwrap_or_else(|err| err.to_compile_error().into())
     })) {
         Ok(tokens) => tokens,
         Err(payload) => panic_to_compile_error(payload),
     }
 }
-
-fn panic_to_compile_error(payload: Box<dyn std::any::Any + Send>) -> TokenStream {
-    let message = if let Some(message) = payload.downcast_ref::<String>() {
-        message.clone()
-    } else if let Some(message) = payload.downcast_ref::<&str>() {
-        (*message).to_string()
-    } else {
-        "symbolix-compile internal error".to_string()
-    };
-
-    quote! {
-        compile_error!(#message);
-    }
-    .into()
-}
-

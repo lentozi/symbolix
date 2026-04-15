@@ -11,7 +11,6 @@ use crate::{
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{Add, Div, Mul, Neg, Sub};
-use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum NumericExpression {
@@ -518,56 +517,3 @@ impl fmt::Display for NumericExpression {
     }
 }
 
-impl NumericExpression {
-    pub fn to_owned_tree(&self) -> OwnedTree {
-        match self {
-            NumericExpression::Constant(n) => OwnedTree::new(format!("{n}")),
-
-            NumericExpression::Variable(v) => OwnedTree::new(format!("{v}")),
-
-            NumericExpression::Negation(expr) => {
-                OwnedTree::new("-".to_string()).with_child(expr.to_owned_tree())
-            }
-
-            NumericExpression::Addition(bucket) => {
-                let mut node = OwnedTree::new("+".to_string());
-                for term in bucket.iter() {
-                    node = node.with_child(term.to_owned_tree());
-                }
-                node
-            }
-
-            NumericExpression::Multiplication(bucket) => {
-                let mut node = OwnedTree::new("*".to_string());
-                for factor in bucket.iter() {
-                    node = node.with_child(factor.to_owned_tree());
-                }
-                node
-            }
-
-            NumericExpression::Power { base, exponent } => OwnedTree::new("^".to_string())
-                .with_child(base.to_owned_tree())
-                .with_child(exponent.to_owned_tree()),
-
-            NumericExpression::Piecewise { cases, otherwise } => {
-                let mut node = OwnedTree::new("piecewise".to_string());
-
-                for (cond, expr) in cases {
-                    node = node.with_child(
-                        OwnedTree::new("case".to_string())
-                            .with_child(cond.to_owned_tree())
-                            .with_child(expr.to_owned_tree()),
-                    );
-                }
-
-                if let Some(other) = otherwise {
-                    node = node.with_child(
-                        OwnedTree::new("otherwise".to_string()).with_child(other.to_owned_tree()),
-                    );
-                }
-
-                node
-            }
-        }
-    }
-}

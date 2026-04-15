@@ -241,10 +241,7 @@ pub fn convert_expr(
                         ))),
                         _ => Err(syn::Error::new_spanned(
                             &binary_expr.op,
-                            format!(
-                                "symbolix! does not support binary operator {:?}",
-                                binary_expr.op
-                            ),
+                            "symbolix! encountered an unsupported binary operator",
                         )),
                     }
                 }
@@ -585,19 +582,13 @@ pub fn convert_expr(
                 UnOp::Neg(_) => Ok(CompileValue::Semantic(-expr)),
                 _ => Err(syn::Error::new_spanned(
                     unary_expr,
-                    format!(
-                        "symbolix! does not support unary operator {:?}",
-                        unary_expr.op
-                    ),
+                    "symbolix! encountered an unsupported unary operator",
                 )),
             }
         }
         _ => Err(syn::Error::new_spanned(
             expr,
-            format!(
-                "symbolix! encountered an unsupported expression shape: {:?}",
-                expr
-            ),
+            "symbolix! encountered an unsupported expression shape",
         )),
     }
 }

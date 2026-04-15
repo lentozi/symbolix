@@ -7,4 +7,3 @@ edition = "2021"
 nom = "8.0.0"
 log = "0.4.29"
 ordered-float = "5.1.0"
-tree-drawer = { git = "https://github.com/lentozi/tree-drawer.git" }

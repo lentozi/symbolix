@@ -9,7 +9,6 @@ use crate::{
 use std::fmt;
 use std::fmt::Formatter;
 use std::ops::{BitAnd, BitOr, Not};
-use tree_drawer::tree::OwnedTree;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum LogicalExpression {
@@ -288,40 +287,3 @@ impl fmt::Display for LogicalExpression {
     }
 }
 
-impl LogicalExpression {
-    pub fn to_owned_tree(&self) -> OwnedTree {
-        match self {
-            LogicalExpression::Constant(b) => OwnedTree::new(format!("{b}")),
-
-            LogicalExpression::Variable(v) => OwnedTree::new(format!("{v}")),
-
-            LogicalExpression::Not(expr) => {
-                OwnedTree::new("NOT".to_string()).with_child(expr.to_owned_tree())
-            }
-
-            LogicalExpression::And(bucket) => {
-                let mut node = OwnedTree::new("AND".to_string());
-                for term in bucket.iter() {
-                    node = node.with_child(term.to_owned_tree());
-                }
-                node
-            }
-
-            LogicalExpression::Or(bucket) => {
-                let mut node = OwnedTree::new("OR".to_string());
-                for term in bucket.iter() {
-                    node = node.with_child(term.to_owned_tree());
-                }
-                node
-            }
-
-            LogicalExpression::Relation {
-                left,
-                operator,
-                right,
-            } => OwnedTree::new(format!("{operator}"))
-                .with_child(left.to_owned_tree())
-                .with_child(right.to_owned_tree()),
-        }
-    }
-}
