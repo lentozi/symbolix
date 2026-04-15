@@ -8,18 +8,18 @@ use symbolix_core::parser::Parser;
 fn test_unary_parsing() {
     let input = "-x + y - !z";
     let expected_expression = Expression::binary(
-        Expression::unary(
-            Symbol::Unary(Unary::Minus),
-            Expression::variable("x".parse().unwrap()),
-        ),
-        Symbol::Binary(Binary::Add),
         Expression::binary(
-            Expression::variable("y".parse().unwrap()),
-            Symbol::Binary(Binary::Subtract),
             Expression::unary(
-                Symbol::Unary(Unary::LogicNot),
-                Expression::variable("z".parse().unwrap()),
+                Symbol::Unary(Unary::Minus),
+                Expression::variable("x".parse().unwrap()),
             ),
+            Symbol::Binary(Binary::Add),
+            Expression::variable("y".parse().unwrap()),
+        ),
+        Symbol::Binary(Binary::Subtract),
+        Expression::unary(
+            Symbol::Unary(Unary::LogicNot),
+            Expression::variable("z".parse().unwrap()),
         ),
     );
 
@@ -82,20 +82,58 @@ fn test_logic_parsing() {
 fn test_symbol_precedence() {
     let input = "a + b * c - d / e";
     let expected_expression = Expression::binary(
-        Expression::variable("a".parse().unwrap()),
-        Symbol::Binary(Binary::Add),
         Expression::binary(
+            Expression::variable("a".parse().unwrap()),
+            Symbol::Binary(Binary::Add),
             Expression::binary(
                 Expression::variable("b".parse().unwrap()),
                 Symbol::Binary(Binary::Multiply),
                 Expression::variable("c".parse().unwrap()),
             ),
+        ),
+        Symbol::Binary(Binary::Subtract),
+        Expression::binary(
+            Expression::variable("d".parse().unwrap()),
+            Symbol::Binary(Binary::Divide),
+            Expression::variable("e".parse().unwrap()),
+        ),
+    );
+
+    let mut lexer = Lexer::new(input);
+    let parsed_expression = Parser::pratt(&mut lexer);
+    assert_eq!(parsed_expression, expected_expression);
+    assert!(lexer.next_token().is_none());
+}
+
+#[test]
+fn test_left_associative_subtraction() {
+    let input = "a - b - c";
+    let expected_expression = Expression::binary(
+        Expression::binary(
+            Expression::variable("a".parse().unwrap()),
             Symbol::Binary(Binary::Subtract),
-            Expression::binary(
-                Expression::variable("d".parse().unwrap()),
-                Symbol::Binary(Binary::Divide),
-                Expression::variable("e".parse().unwrap()),
-            ),
+            Expression::variable("b".parse().unwrap()),
+        ),
+        Symbol::Binary(Binary::Subtract),
+        Expression::variable("c".parse().unwrap()),
+    );
+
+    let mut lexer = Lexer::new(input);
+    let parsed_expression = Parser::pratt(&mut lexer);
+    assert_eq!(parsed_expression, expected_expression);
+    assert!(lexer.next_token().is_none());
+}
+
+#[test]
+fn test_power_is_right_associative() {
+    let input = "a ^ b ^ c";
+    let expected_expression = Expression::binary(
+        Expression::variable("a".parse().unwrap()),
+        Symbol::Binary(Binary::Power),
+        Expression::binary(
+            Expression::variable("b".parse().unwrap()),
+            Symbol::Binary(Binary::Power),
+            Expression::variable("c".parse().unwrap()),
         ),
     );
 

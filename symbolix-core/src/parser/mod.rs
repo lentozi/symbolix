@@ -14,6 +14,25 @@ impl Parser {
     }
 }
 
+fn infix_right_precedence(operation: Symbol) -> Precedence {
+    match operation {
+        Symbol::Binary(Binary::Power) => get_precedence(&operation),
+        Symbol::Binary(_) | Symbol::Relation(_) => match get_precedence(&operation) {
+            Precedence::TERNARY => Precedence::Conditional,
+            Precedence::Conditional => Precedence::LogicOr,
+            Precedence::LogicOr => Precedence::LogicAnd,
+            Precedence::LogicAnd => Precedence::Equality,
+            Precedence::Equality => Precedence::Relational,
+            Precedence::Relational => Precedence::Additive,
+            Precedence::Additive => Precedence::Multiplicative,
+            Precedence::Multiplicative => Precedence::Power,
+            Precedence::Power => Precedence::Unary,
+            Precedence::Unary | Precedence::Lowest => Precedence::Unary,
+        },
+        _ => get_precedence(&operation),
+    }
+}
+
 fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
     // nud
     let mut left_expr = match lexer.next_token() {
@@ -66,7 +85,7 @@ fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
         }
 
         lexer.next_token(); // consume operator
-        let right = pratt_parsing(lexer, get_precedence(&operation));
+        let right = pratt_parsing(lexer, infix_right_precedence(operation));
         left_expr = match operation {
             Symbol::Binary(_) => Expression::binary(left_expr, operation, right),
             Symbol::Relation(_) => Expression::relation(left_expr, operation, right),

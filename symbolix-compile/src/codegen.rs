@@ -364,14 +364,15 @@ pub fn codegen_numeric(expr: &NumericExpression) -> TokenStream {
             let mut terms = Vec::new();
             for c in &bucket.constants {
                 let val = c.to_float();
-                terms.push(quote! { #val });
+                terms.push(quote! { (#val) });
             }
             for v in &bucket.variables {
                 let name = format_ident!("{}", v.name);
-                terms.push(quote! { #name });
+                terms.push(quote! { (#name) });
             }
             for e in &bucket.expressions {
-                terms.push(codegen_numeric(e));
+                let expr = codegen_numeric(e);
+                terms.push(quote! { (#expr) });
             }
 
             if terms.is_empty() {
@@ -384,14 +385,15 @@ pub fn codegen_numeric(expr: &NumericExpression) -> TokenStream {
             let mut terms = Vec::new();
             for c in &bucket.constants {
                 let val = c.to_float();
-                terms.push(quote! { #val });
+                terms.push(quote! { (#val) });
             }
             for v in &bucket.variables {
                 let name = format_ident!("{}", v.name);
-                terms.push(quote! { #name });
+                terms.push(quote! { (#name) });
             }
             for e in &bucket.expressions {
-                terms.push(codegen_numeric(e));
+                let expr = codegen_numeric(e);
+                terms.push(quote! { (#expr) });
             }
 
             if terms.is_empty() {
@@ -448,14 +450,15 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
         LogicalExpression::And(bucket) => {
             let mut terms = Vec::new();
             for c in &bucket.constants {
-                terms.push(quote! { #c });
+                terms.push(quote! { (#c) });
             }
             for v in &bucket.variables {
                 let name = format_ident!("{}", v.name);
-                terms.push(quote! { #name });
+                terms.push(quote! { (#name) });
             }
             for e in &bucket.expressions {
-                terms.push(codegen_logical(e));
+                let expr = codegen_logical(e);
+                terms.push(quote! { (#expr) });
             }
 
             if terms.is_empty() {
@@ -467,14 +470,15 @@ pub fn codegen_logical(expr: &LogicalExpression) -> TokenStream {
         LogicalExpression::Or(bucket) => {
             let mut terms = Vec::new();
             for c in &bucket.constants {
-                terms.push(quote! { #c });
+                terms.push(quote! { (#c) });
             }
             for v in &bucket.variables {
                 let name = format_ident!("{}", v.name);
-                terms.push(quote! { #name });
+                terms.push(quote! { (#name) });
             }
             for e in &bucket.expressions {
-                terms.push(codegen_logical(e));
+                let expr = codegen_logical(e);
+                terms.push(quote! { (#expr) });
             }
 
             if terms.is_empty() {
