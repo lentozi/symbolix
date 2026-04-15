@@ -17,8 +17,8 @@ use syn::spanned::Spanned;
 use syn::{BinOp, Block, Expr, ExprIf, Lit, LitStr, Token, UnOp};
 
 struct VarArgs {
-    name: String,
-    ty: String,
+    name: LitStr,
+    ty: syn::Type,
 }
 
 impl Parse for VarArgs {
@@ -26,18 +26,6 @@ impl Parse for VarArgs {
         let name: syn::LitStr = input.parse()?;
         input.parse::<Token![,]>()?;
         let ty: syn::Type = input.parse()?;
-
-        let name = name.value();
-        let ty = match ty {
-            syn::Type::Path(type_path) => {
-                if let Some(type_ident) = type_path.path.get_ident() {
-                    type_ident.to_string()
-                } else {
-                    panic!("unsupported type")
-                }
-            }
-            _ => panic!("unsupported type"),
-        };
 
         Ok(VarArgs { name, ty })
     }
@@ -77,7 +65,9 @@ pub fn convert_block(
                 };
 
                 // expr 是等号右侧的元数据
-                let expr_token = local.init.as_ref().unwrap().clone();
+                let expr_token = local.init.as_ref().ok_or_else(|| {
+                    syn::Error::new_spanned(local, "symbolix! requires let bindings to have initializers")
+                })?;
 
                 // 右侧可能出现的：宏调用、方法调用、二元表达式、if 语句
                 let expr = convert_expr(expr_token.expr.as_ref(), &mut table)?;
@@ -107,7 +97,11 @@ pub fn convert_block(
                             .iter()
                             .enumerate()
                             .map(|(i, x)| match x {
-                                Expr::Path(path) => path.path.get_ident().unwrap().clone(),
+                                Expr::Path(path) => path
+                                    .path
+                                    .get_ident()
+                                    .cloned()
+                                    .unwrap_or_else(|| format_ident!("_{}", i)),
                                 _ => format_ident!("_{}", i),
                             })
                             .collect::<Vec<_>>();
@@ -146,10 +140,14 @@ pub fn convert_expr(
     match expr {
         Expr::Lit(lit_expr) => Ok(CompileValue::Semantic(match &lit_expr.lit {
             Lit::Int(lit_int) => SemanticExpression::numeric(NumericExpression::constant(
-                Number::integer(lit_int.base10_parse().expect("failed to parse lit_int")),
+                Number::integer(lit_int.base10_parse().map_err(|err| {
+                    syn::Error::new_spanned(lit_int, format!("failed to parse integer literal: {err}"))
+                })?),
             )),
             Lit::Float(lit_float) => SemanticExpression::numeric(NumericExpression::constant(
-                Number::float(lit_float.base10_parse().expect("failed to parse lit_float")),
+                Number::float(lit_float.base10_parse().map_err(|err| {
+                    syn::Error::new_spanned(lit_float, format!("failed to parse float literal: {err}"))
+                })?),
             )),
             Lit::Bool(lit_bool) => {
                 SemanticExpression::logical(LogicalExpression::constant(lit_bool.value))
@@ -261,30 +259,46 @@ pub fn convert_expr(
             if let Some(ident) = mac.path.get_ident() {
                 match ident.to_string().as_str() {
                     "var" => {
-                        let args: VarArgs =
-                            syn::parse2(tokens).expect("failed to parse macro arguments");
-                        let variable =
-                            match args.ty.as_ref() {
-                                "i32" => var!(args.name.as_ref(), VariableType::Integer, None),
-                                "i64" => var!(args.name.as_ref(), VariableType::Integer, None),
-                                "f32" => var!(args.name.as_ref(), VariableType::Float, None),
-                                "f64" => var!(args.name.as_ref(), VariableType::Float, None),
-                                "bool" => var!(args.name.as_ref(), VariableType::Boolean, None),
-                                _ => return Err(syn::Error::new_spanned(
-                                    macro_call,
-                                    format!(
-                                        "var! only supports i32, i64, f32, f64, and bool, got {}",
-                                        args.ty
-                                    ),
-                                )),
-                            };
+                        let args: VarArgs = syn::parse2(tokens)?;
+                        let ty_name = match &args.ty {
+                            syn::Type::Path(type_path) => type_path
+                                .path
+                                .get_ident()
+                                .map(ToString::to_string)
+                                .ok_or_else(|| {
+                                    syn::Error::new_spanned(
+                                        &args.ty,
+                                        "var! only supports primitive identifier types",
+                                    )
+                                })?,
+                            _ => {
+                                return Err(syn::Error::new_spanned(
+                                    &args.ty,
+                                    "var! only supports primitive identifier types",
+                                ))
+                            }
+                        };
+                        let variable = match ty_name.as_str() {
+                            "i32" => var!(args.name.value().as_str(), VariableType::Integer, None),
+                            "i64" => var!(args.name.value().as_str(), VariableType::Integer, None),
+                            "f32" => var!(args.name.value().as_str(), VariableType::Float, None),
+                            "f64" => var!(args.name.value().as_str(), VariableType::Float, None),
+                            "bool" => var!(args.name.value().as_str(), VariableType::Boolean, None),
+                            _ => return Err(syn::Error::new_spanned(
+                                &args.ty,
+                                format!(
+                                    "var! only supports i32, i64, f32, f64, and bool, got {}",
+                                    ty_name
+                                ),
+                            )),
+                        };
 
                         Ok(CompileValue::Semantic(SemanticExpression::numeric(
                             NumericExpression::variable(variable),
                         )))
                     }
                     "expr" => {
-                        let args: LitStr = syn::parse2(tokens).unwrap();
+                        let args: LitStr = syn::parse2(tokens)?;
                         let expr_str = args.value();
                         let mut lexer = Lexer::new(&expr_str);
                         let expression = symbolix_core::parser::Parser::pratt(&mut lexer);
@@ -302,7 +316,12 @@ pub fn convert_expr(
                             ));
                         }
 
-                        let equation_arg = args.args.first().unwrap();
+                        let equation_arg = args.args.first().ok_or_else(|| {
+                            syn::Error::new_spanned(
+                                macro_call,
+                                "solve!(equation) or solve!(equation, variable) requires an `equation` argument",
+                            )
+                        })?;
                         let equation_name = match equation_arg {
                             Expr::Path(path) => path.path.segments[0].ident.to_string(),
                             _ => return Err(syn::Error::new_spanned(
@@ -311,12 +330,20 @@ pub fn convert_expr(
                             )),
                         };
 
-                        let equation_ir = table
-                            .get(&equation_name)
-                            .expect("solve target equation not found");
+                        let equation_ir = table.get(&equation_name).ok_or_else(|| {
+                            syn::Error::new_spanned(
+                                equation_arg,
+                                format!("undefined binding `{equation_name}` in symbolix! block"),
+                            )
+                        })?;
 
                         let equation = if args.args.len() == 2 {
-                            let solve_arg = args.args.iter().nth(1).unwrap();
+                            let solve_arg = args.args.iter().nth(1).ok_or_else(|| {
+                                syn::Error::new_spanned(
+                                    macro_call,
+                                    "solve!(equation, variable) is missing the `variable` argument",
+                                )
+                            })?;
                             let solve_name = match solve_arg {
                                 Expr::Path(path) => path.path.segments[0].ident.to_string(),
                                 _ => {
@@ -326,8 +353,12 @@ pub fn convert_expr(
                                     ))
                                 }
                             };
-                            let solve_ir =
-                                table.get(&solve_name).expect("solve variable not found");
+                            let solve_ir = table.get(&solve_name).ok_or_else(|| {
+                                syn::Error::new_spanned(
+                                    solve_arg,
+                                    format!("undefined binding `{solve_name}` in symbolix! block"),
+                                )
+                            })?;
                             let solve_for = match solve_ir {
                                 CompileValue::Semantic(SemanticExpression::Numeric(
                                     NumericExpression::Variable(variable),
@@ -344,17 +375,19 @@ pub fn convert_expr(
                                 expect_semantic(equation_ir.clone(), equation_arg)?,
                                 solve_for,
                             )
-                            .expect("equation build failed")
+                            .map_err(|err| syn::Error::new_spanned(equation_arg, err.to_string()))?
                         } else {
                             symbolix_core::equation::Equation::infer(expect_semantic(
                                 equation_ir.clone(),
                                 equation_arg,
                             )?)
-                            .expect("equation infer failed")
+                            .map_err(|err| syn::Error::new_spanned(equation_arg, err.to_string()))?
                         };
 
                         Ok(CompileValue::SolutionSet(
-                            equation.solve().expect("equation solve failed"),
+                            equation
+                                .solve()
+                                .map_err(|err| syn::Error::new_spanned(macro_call, err.to_string()))?,
                         ))
                     }
                     _ => Err(syn::Error::new_spanned(
@@ -384,16 +417,24 @@ pub fn convert_expr(
                 }
             };
 
-            let receiver_ir = table.get(&receiver_name).expect("receiver not found");
+            let receiver_ir = table.get(&receiver_name).ok_or_else(|| {
+                syn::Error::new_spanned(
+                    receiver,
+                    format!("undefined binding `{receiver_name}` in symbolix! block"),
+                )
+            })?;
 
             if is_equation(receiver_ir) {
                 // solve 方法
                 if args.len() > 1 {
-                    panic!(
-                        "method call {} expects 0 or 1 argument, got {}",
-                        method_name,
-                        args.len()
-                    );
+                    return Err(syn::Error::new_spanned(
+                        method_call_expr,
+                        format!(
+                            "equation method `{}` in symbolix! expects 0 or 1 argument, got {}",
+                            method_name,
+                            args.len()
+                        ),
+                    ));
                 }
 
                 match method_name.as_str() {
@@ -408,15 +449,23 @@ pub fn convert_expr(
                 }
             } else {
                 if args.len() != 1 {
-                    panic!(
-                        "method call {} expects 1 argument, got {}",
-                        method_name,
-                        args.len()
-                    );
+                    return Err(syn::Error::new_spanned(
+                        method_call_expr,
+                        format!(
+                            "method `{}` in symbolix! expects exactly 1 argument, got {}",
+                            method_name,
+                            args.len()
+                        ),
+                    ));
                 }
 
                 // 取出第一个参数
-                let arg = args.first().unwrap();
+                let arg = args.first().ok_or_else(|| {
+                    syn::Error::new_spanned(
+                        method_call_expr,
+                        format!("method `{}` in symbolix! requires exactly 1 argument", method_name),
+                    )
+                })?;
 
                 let arg_name: String = match arg {
                     Expr::Path(path) => path.path.segments[0].ident.to_string(),
@@ -432,7 +481,15 @@ pub fn convert_expr(
                 };
 
                 let arg_ir = expect_semantic(
-                    table.get(&arg_name).expect("argument not found").clone(),
+                    table
+                        .get(&arg_name)
+                        .ok_or_else(|| {
+                            syn::Error::new_spanned(
+                                arg,
+                                format!("undefined binding `{arg_name}` in symbolix! block"),
+                            )
+                        })?
+                        .clone(),
                     arg,
                 )?;
 
@@ -632,7 +689,12 @@ fn handle_block_in_if(
     Ok(expr_list
         .into_iter()
         .next()
-        .expect("failed to run handle_block_in_if"))
+        .ok_or_else(|| {
+            syn::Error::new_spanned(
+                block,
+                "if blocks inside symbolix! must end with a return expression",
+            )
+        })?)
 }
 
 fn expect_semantic(value: CompileValue, span: &impl Spanned) -> syn::Result<SemanticExpression> {

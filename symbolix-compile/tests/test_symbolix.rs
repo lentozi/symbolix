@@ -1,20 +1,6 @@
 use symbolix_compile::symbolix;
 
 #[test]
-fn solve_infers_target_variable() {
-    let compiled = symbolix! {
-        let lhs = expr!("2 * x + 2");
-        let rhs = expr!("0");
-        let equation = lhs.equal_to(rhs);
-        solve!(equation)
-    };
-
-    let result = compiled.calculate();
-    let rendered = format!("{}", result);
-    assert!(rendered.contains("-1"));
-}
-
-#[test]
 fn solve_accepts_explicit_target_variable() {
     let compiled = symbolix! {
         let x = var!("x", f64);

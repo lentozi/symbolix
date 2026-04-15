@@ -9,7 +9,7 @@ use symbolix_core::{
     equation::SolutionSet,
     semantic::semantic_ir::SemanticExpression,
 };
-use syn::{parse_macro_input, LitStr};
+use syn::{parse_macro_input, spanned::Spanned, LitStr};
 
 use crate::codegen::codegen_semantic;
 
@@ -72,7 +72,7 @@ pub fn symbolix(input: TokenStream) -> TokenStream {
                 #input
             });
 
-            let block: syn::Block = syn::parse2(wrapped).unwrap();
+            let block: syn::Block = syn::parse2(wrapped)?;
 
             let mut expr_table: HashMap<String, CompileValue> = HashMap::new();
             let (expr_list, return_name_list): (Vec<CompileValue>, Vec<Ident>) =
@@ -81,7 +81,9 @@ pub fn symbolix(input: TokenStream) -> TokenStream {
             let (var_names, var_types) = get_func_arguments(&expr_list);
 
             let (code, return_type): (proc_macro2::TokenStream, proc_macro2::TokenStream) = if expr_list.len() == 1 {
-                let expr = expr_list.into_iter().next().unwrap();
+                let expr = expr_list.into_iter().next().ok_or_else(|| {
+                    syn::Error::new(block.span(), "symbolix! block must end with a return expression")
+                })?;
                 let code = codegen_value(&expr);
 
                 let return_type = get_func_return_type(&expr);
