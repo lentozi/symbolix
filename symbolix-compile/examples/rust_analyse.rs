@@ -14,7 +14,7 @@ fn main() {
 
         let equation = expr.equal_to(y);
 
-        let result = equation.solve();
+        let result = solve!(equation);
 
         (result, y)
         // result

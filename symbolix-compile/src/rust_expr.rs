@@ -1,3 +1,4 @@
+use crate::CompileValue;
 use proc_macro2::Ident;
 use quote::format_ident;
 use std::collections::HashMap;
@@ -11,9 +12,9 @@ use symbolix_core::semantic::variable::VariableType;
 use symbolix_core::semantic::Analyzer;
 use symbolix_core::var;
 use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{BinOp, Block, Expr, ExprIf, Lit, LitStr, Token, UnOp};
-use crate::CompileValue;
 
 struct VarArgs {
     name: String,
@@ -39,6 +40,18 @@ impl Parse for VarArgs {
         };
 
         Ok(VarArgs { name, ty })
+    }
+}
+
+struct SolveArgs {
+    args: Punctuated<Expr, Token![,]>,
+}
+
+impl Parse for SolveArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            args: Punctuated::parse_terminated(input)?,
+        })
     }
 }
 
@@ -149,8 +162,14 @@ pub fn convert_expr(
             }
         })),
         Expr::Binary(binary_expr) => {
-            let left = expect_semantic(convert_expr(binary_expr.left.as_ref(), table)?, binary_expr.left.as_ref())?;
-            let right = expect_semantic(convert_expr(binary_expr.right.as_ref(), table)?, binary_expr.right.as_ref())?;
+            let left = expect_semantic(
+                convert_expr(binary_expr.left.as_ref(), table)?,
+                binary_expr.left.as_ref(),
+            )?;
+            let right = expect_semantic(
+                convert_expr(binary_expr.right.as_ref(), table)?,
+                binary_expr.right.as_ref(),
+            )?;
             match &binary_expr.op {
                 BinOp::Add(_) => Ok(CompileValue::Semantic(left + right)),
                 BinOp::Sub(_) => Ok(CompileValue::Semantic(left - right)),
@@ -180,39 +199,54 @@ pub fn convert_expr(
                     };
 
                     match &binary_expr.op {
-                        BinOp::Eq(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                            &left,
-                            &Symbol::Relation(Relation::Equal),
-                            &right,
-                        )))),
-                        BinOp::Ne(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                            &left,
-                            &Symbol::Relation(Relation::NotEqual),
-                            &right,
-                        )))),
-                        BinOp::Gt(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                            &left,
-                            &Symbol::Relation(Relation::GreaterThan),
-                            &right,
-                        )))),
-                        BinOp::Lt(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                            &left,
-                            &Symbol::Relation(Relation::LessThan),
-                            &right,
-                        )))),
-                        BinOp::Ge(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                            &left,
-                            &Symbol::Relation(Relation::GreaterEqual),
-                            &right,
-                        )))),
-                        BinOp::Le(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                            &left,
-                            &Symbol::Relation(Relation::LessEqual),
-                            &right,
-                        )))),
+                        BinOp::Eq(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                            LogicalExpression::relation(
+                                &left,
+                                &Symbol::Relation(Relation::Equal),
+                                &right,
+                            ),
+                        ))),
+                        BinOp::Ne(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                            LogicalExpression::relation(
+                                &left,
+                                &Symbol::Relation(Relation::NotEqual),
+                                &right,
+                            ),
+                        ))),
+                        BinOp::Gt(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                            LogicalExpression::relation(
+                                &left,
+                                &Symbol::Relation(Relation::GreaterThan),
+                                &right,
+                            ),
+                        ))),
+                        BinOp::Lt(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                            LogicalExpression::relation(
+                                &left,
+                                &Symbol::Relation(Relation::LessThan),
+                                &right,
+                            ),
+                        ))),
+                        BinOp::Ge(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                            LogicalExpression::relation(
+                                &left,
+                                &Symbol::Relation(Relation::GreaterEqual),
+                                &right,
+                            ),
+                        ))),
+                        BinOp::Le(_) => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                            LogicalExpression::relation(
+                                &left,
+                                &Symbol::Relation(Relation::LessEqual),
+                                &right,
+                            ),
+                        ))),
                         _ => Err(syn::Error::new_spanned(
                             &binary_expr.op,
-                            format!("symbolix! does not support binary operator {:?}", binary_expr.op),
+                            format!(
+                                "symbolix! does not support binary operator {:?}",
+                                binary_expr.op
+                            ),
                         )),
                     }
                 }
@@ -229,21 +263,25 @@ pub fn convert_expr(
                     "var" => {
                         let args: VarArgs =
                             syn::parse2(tokens).expect("failed to parse macro arguments");
-                        let variable = match args.ty.as_ref() {
-                            "i32" => var!(args.name.as_ref(), VariableType::Integer, None),
-                            "i64" => var!(args.name.as_ref(), VariableType::Integer, None),
-                            "f32" => var!(args.name.as_ref(), VariableType::Float, None),
-                            "f64" => var!(args.name.as_ref(), VariableType::Float, None),
-                            "bool" => var!(args.name.as_ref(), VariableType::Boolean, None),
-                            _ => {
-                                return Err(syn::Error::new_spanned(
+                        let variable =
+                            match args.ty.as_ref() {
+                                "i32" => var!(args.name.as_ref(), VariableType::Integer, None),
+                                "i64" => var!(args.name.as_ref(), VariableType::Integer, None),
+                                "f32" => var!(args.name.as_ref(), VariableType::Float, None),
+                                "f64" => var!(args.name.as_ref(), VariableType::Float, None),
+                                "bool" => var!(args.name.as_ref(), VariableType::Boolean, None),
+                                _ => return Err(syn::Error::new_spanned(
                                     macro_call,
-                                    format!("var! only supports i32, i64, f32, f64, and bool, got {}", args.ty),
-                                ))
-                            }
-                        };
+                                    format!(
+                                        "var! only supports i32, i64, f32, f64, and bool, got {}",
+                                        args.ty
+                                    ),
+                                )),
+                            };
 
-                        Ok(CompileValue::Semantic(SemanticExpression::numeric(NumericExpression::variable(variable))))
+                        Ok(CompileValue::Semantic(SemanticExpression::numeric(
+                            NumericExpression::variable(variable),
+                        )))
                     }
                     "expr" => {
                         let args: LitStr = syn::parse2(tokens).unwrap();
@@ -251,7 +289,73 @@ pub fn convert_expr(
                         let mut lexer = Lexer::new(&expr_str);
                         let expression = symbolix_core::parser::Parser::pratt(&mut lexer);
                         let mut analyzer = Analyzer::new();
-                        Ok(CompileValue::Semantic(analyzer.analyze_with_ctx(&expression)))
+                        Ok(CompileValue::Semantic(
+                            analyzer.analyze_with_ctx(&expression),
+                        ))
+                    }
+                    "solve" => {
+                        let args: SolveArgs = syn::parse2(tokens)?;
+                        if args.args.is_empty() || args.args.len() > 2 {
+                            return Err(syn::Error::new_spanned(
+                                macro_call,
+                                "solve!(equation) or solve!(equation, variable) expects 1 or 2 arguments",
+                            ));
+                        }
+
+                        let equation_arg = args.args.first().unwrap();
+                        let equation_name = match equation_arg {
+                            Expr::Path(path) => path.path.segments[0].ident.to_string(),
+                            _ => return Err(syn::Error::new_spanned(
+                                equation_arg,
+                                "solve!(equation, ...) requires `equation` to be a named binding",
+                            )),
+                        };
+
+                        let equation_ir = table
+                            .get(&equation_name)
+                            .expect("solve target equation not found");
+
+                        let equation = if args.args.len() == 2 {
+                            let solve_arg = args.args.iter().nth(1).unwrap();
+                            let solve_name = match solve_arg {
+                                Expr::Path(path) => path.path.segments[0].ident.to_string(),
+                                _ => {
+                                    return Err(syn::Error::new_spanned(
+                                        solve_arg,
+                                        "solve!(equation, variable) requires `variable` to be a named binding",
+                                    ))
+                                }
+                            };
+                            let solve_ir =
+                                table.get(&solve_name).expect("solve variable not found");
+                            let solve_for = match solve_ir {
+                                CompileValue::Semantic(SemanticExpression::Numeric(
+                                    NumericExpression::Variable(variable),
+                                )) => variable.clone(),
+                                _ => {
+                                    return Err(syn::Error::new_spanned(
+                                        solve_arg,
+                                        "solve!(equation, variable) requires `variable` to be a numeric variable binding",
+                                    ))
+                                }
+                            };
+
+                            symbolix_core::equation::Equation::new(
+                                expect_semantic(equation_ir.clone(), equation_arg)?,
+                                solve_for,
+                            )
+                            .expect("equation build failed")
+                        } else {
+                            symbolix_core::equation::Equation::infer(expect_semantic(
+                                equation_ir.clone(),
+                                equation_arg,
+                            )?)
+                            .expect("equation infer failed")
+                        };
+
+                        Ok(CompileValue::SolutionSet(
+                            equation.solve().expect("equation solve failed"),
+                        ))
                     }
                     _ => Err(syn::Error::new_spanned(
                         macro_call,
@@ -293,44 +397,10 @@ pub fn convert_expr(
                 }
 
                 match method_name.as_str() {
-                    "solve" => {
-                        let equation = if let Some(arg) = args.first() {
-                            let arg_name = match arg {
-                                Expr::Path(path) => path.path.segments[0].ident.to_string(),
-                                _ => {
-                                    return Err(syn::Error::new_spanned(
-                                        arg,
-                                        "equation.solve(arg) requires `arg` to be a named variable",
-                                    ))
-                                }
-                            };
-                            let arg_ir = table.get(&arg_name).expect("solve target not found");
-                            let solve_for = match arg_ir {
-                                CompileValue::Semantic(SemanticExpression::Numeric(NumericExpression::Variable(variable))) => {
-                                    variable.clone()
-                                }
-                                _ => {
-                                    return Err(syn::Error::new_spanned(
-                                        arg,
-                                        "equation.solve(arg) requires `arg` to be a numeric variable binding",
-                                    ))
-                                }
-                            };
-
-                            symbolix_core::equation::Equation::new(
-                                expect_semantic(receiver_ir.clone(), receiver)?,
-                                solve_for,
-                            )
-                                .expect("equation build failed")
-                        } else {
-                            symbolix_core::equation::Equation::infer(
-                                expect_semantic(receiver_ir.clone(), receiver)?,
-                            )
-                                .expect("equation infer failed")
-                        };
-
-                        Ok(CompileValue::SolutionSet(equation.solve().expect("equation solve failed")))
-                    }
+                    "solve" => Err(syn::Error::new_spanned(
+                        method_call_expr,
+                        "use solve!(equation) or solve!(equation, variable) inside symbolix!, not equation.solve(...)",
+                    )),
                     _ => Err(syn::Error::new_spanned(
                         method_call_expr,
                         format!("unsupported equation method `{}` in symbolix!", method_name),
@@ -353,65 +423,79 @@ pub fn convert_expr(
                     _ => {
                         return Err(syn::Error::new_spanned(
                             arg,
-                            format!("method `{}` in symbolix! requires a named variable argument", method_name),
+                            format!(
+                                "method `{}` in symbolix! requires a named variable argument",
+                                method_name
+                            ),
                         ))
                     }
                 };
 
-                let arg_ir = expect_semantic(table.get(&arg_name).expect("argument not found").clone(), arg)?;
+                let arg_ir = expect_semantic(
+                    table.get(&arg_name).expect("argument not found").clone(),
+                    arg,
+                )?;
 
                 match (expect_semantic(receiver_ir.clone(), receiver)?, arg_ir) {
                     (SemanticExpression::Numeric(receiver), SemanticExpression::Numeric(arg)) => {
                         match method_name.as_str() {
-                            "equal_to" => Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
-                                &receiver,
-                                &Symbol::Relation(Relation::Equal),
-                                &arg,
-                            )))),
-                            "not_equal_to" => {
-                                Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
+                            "equal_to" => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                                LogicalExpression::relation(
+                                    &receiver,
+                                    &Symbol::Relation(Relation::Equal),
+                                    &arg,
+                                ),
+                            ))),
+                            "not_equal_to" => Ok(CompileValue::Semantic(
+                                SemanticExpression::logical(LogicalExpression::relation(
                                     &receiver,
                                     &Symbol::Relation(Relation::NotEqual),
                                     &arg,
-                                ))))
-                            }
-                            "less_than" => {
-                                Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
+                                )),
+                            )),
+                            "less_than" => Ok(CompileValue::Semantic(SemanticExpression::logical(
+                                LogicalExpression::relation(
                                     &receiver,
                                     &Symbol::Relation(Relation::LessThan),
                                     &arg,
-                                ))))
-                            }
-                            "greater_than" => {
-                                Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
+                                ),
+                            ))),
+                            "greater_than" => Ok(CompileValue::Semantic(
+                                SemanticExpression::logical(LogicalExpression::relation(
                                     &receiver,
                                     &Symbol::Relation(Relation::GreaterThan),
                                     &arg,
-                                ))))
-                            }
-                            "less_equal" => {
-                                Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
+                                )),
+                            )),
+                            "less_equal" => Ok(CompileValue::Semantic(
+                                SemanticExpression::logical(LogicalExpression::relation(
                                     &receiver,
                                     &Symbol::Relation(Relation::LessEqual),
                                     &arg,
-                                ))))
-                            }
-                            "greater_equal" => {
-                                Ok(CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::relation(
+                                )),
+                            )),
+                            "greater_equal" => Ok(CompileValue::Semantic(
+                                SemanticExpression::logical(LogicalExpression::relation(
                                     &receiver,
                                     &Symbol::Relation(Relation::GreaterEqual),
                                     &arg,
-                                ))))
-                            }
+                                )),
+                            )),
                             _ => Err(syn::Error::new_spanned(
                                 method_call_expr,
-                                format!("unsupported numeric method `{}` in symbolix!", method_name),
+                                format!(
+                                    "unsupported numeric method `{}` in symbolix!",
+                                    method_name
+                                ),
                             )),
                         }
                     }
                     _ => Err(syn::Error::new_spanned(
                         method_call_expr,
-                        format!("method `{}` in symbolix! is only supported for numeric expressions", method_name),
+                        format!(
+                            "method `{}` in symbolix! is only supported for numeric expressions",
+                            method_name
+                        ),
                     )),
                 }
             }
@@ -435,19 +519,28 @@ pub fn convert_expr(
             }
         }
         Expr::Unary(unary_expr) => {
-            let expr = expect_semantic(convert_expr(unary_expr.expr.as_ref(), table)?, unary_expr.expr.as_ref())?;
+            let expr = expect_semantic(
+                convert_expr(unary_expr.expr.as_ref(), table)?,
+                unary_expr.expr.as_ref(),
+            )?;
             match unary_expr.op {
                 UnOp::Not(_) => Ok(CompileValue::Semantic(!expr)),
                 UnOp::Neg(_) => Ok(CompileValue::Semantic(-expr)),
                 _ => Err(syn::Error::new_spanned(
                     unary_expr,
-                    format!("symbolix! does not support unary operator {:?}", unary_expr.op),
+                    format!(
+                        "symbolix! does not support unary operator {:?}",
+                        unary_expr.op
+                    ),
                 )),
             }
         }
         _ => Err(syn::Error::new_spanned(
             expr,
-            format!("symbolix! encountered an unsupported expression shape: {:?}", expr),
+            format!(
+                "symbolix! encountered an unsupported expression shape: {:?}",
+                expr
+            ),
         )),
     }
 }
@@ -456,7 +549,10 @@ fn handle_if(
     if_expr: &ExprIf,
     mut table: &mut HashMap<String, CompileValue>,
 ) -> syn::Result<CompileValue> {
-    let cond = match expect_semantic(convert_expr(if_expr.cond.as_ref(), table)?, if_expr.cond.as_ref())? {
+    let cond = match expect_semantic(
+        convert_expr(if_expr.cond.as_ref(), table)?,
+        if_expr.cond.as_ref(),
+    )? {
         SemanticExpression::Logical(logical) => logical,
         _ => {
             return Err(syn::Error::new_spanned(
@@ -510,7 +606,9 @@ fn handle_if(
     let cases = vec![(cond, expr)];
     let otherwise = Some(else_expr);
 
-    Ok(CompileValue::Semantic(SemanticExpression::numeric(NumericExpression::piecewise(cases, otherwise))))
+    Ok(CompileValue::Semantic(SemanticExpression::numeric(
+        NumericExpression::piecewise(cases, otherwise),
+    )))
 }
 
 fn handle_block_in_if(
@@ -556,4 +654,3 @@ fn is_equation(value: &CompileValue) -> bool {
         }))
     )
 }
-

@@ -132,7 +132,7 @@ fn main() {
         optimize(&mut semantic);
 
         let equation = Equation::new(semantic);
-        let result = equation.solve().unwrap();
+        let result = solve!(equation).unwrap();
         println!("x = {}", result);
     }
 }
@@ -234,5 +234,6 @@ fn main() {
 ## 许可证
 
 本项目采用 MIT 许可证，详见根目录中的 `LICENSE` 文件。
+
 
 

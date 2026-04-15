@@ -6,7 +6,7 @@ fn solve_infers_target_variable() {
         let lhs = expr!("2 * x + 2");
         let rhs = expr!("0");
         let equation = lhs.equal_to(rhs);
-        equation.solve()
+        solve!(equation)
     };
 
     let result = compiled.calculate();
@@ -22,7 +22,7 @@ fn solve_accepts_explicit_target_variable() {
         let lhs = x + a;
         let rhs = expr!("0");
         let equation = lhs.equal_to(rhs);
-        equation.solve(x)
+        solve!(equation, x)
     };
 
     let result = compiled.calculate(4.0);
