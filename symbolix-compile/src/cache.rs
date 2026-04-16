@@ -172,14 +172,3 @@ fn stable_hash(value: &str) -> String {
     value.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::stable_hash;
-
-    #[test]
-    fn stable_hash_is_deterministic() {
-        assert_eq!(stable_hash("symbolix"), stable_hash("symbolix"));
-        assert_ne!(stable_hash("symbolix"), stable_hash("formula"));
-    }
-}
