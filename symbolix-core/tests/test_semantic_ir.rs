@@ -62,6 +62,65 @@ fn numeric_expression_operations_cover_piecewise_power_and_substitute() {
 }
 
 #[test]
+fn numeric_expression_covers_piecewise_pairwise_composition_and_factor_hooks() {
+    let x = NumericExpression::variable(numeric_var("x"));
+    let y = NumericExpression::variable(numeric_var("y"));
+    let positive_x = LogicalExpression::relation(
+        &x,
+        &Symbol::Relation(Relation::GreaterThan),
+        &NumericExpression::constant(Number::integer(0)),
+    );
+    let positive_y = LogicalExpression::relation(
+        &y,
+        &Symbol::Relation(Relation::GreaterThan),
+        &NumericExpression::constant(Number::integer(0)),
+    );
+
+    let left = NumericExpression::piecewise(
+        vec![(positive_x.clone(), x.clone())],
+        Some(NumericExpression::constant(Number::integer(1))),
+    );
+    let right = NumericExpression::piecewise(
+        vec![(positive_y.clone(), y.clone())],
+        Some(NumericExpression::constant(Number::integer(2))),
+    );
+
+    let added = NumericExpression::addition(&left, &right);
+    let multiplied = NumericExpression::multiplication(&left, &right);
+    let added_rendered = added.to_string();
+    let multiplied_rendered = multiplied.to_string();
+    assert!(added_rendered.contains("x"));
+    assert!(added_rendered.contains("y"));
+    assert!(added_rendered.contains("other"));
+    assert!(multiplied_rendered.contains("x"));
+    assert!(multiplied_rendered.contains("y"));
+    assert!(multiplied_rendered.contains("other"));
+
+    let nested_power = NumericExpression::power(
+        &NumericExpression::power(&x, &NumericExpression::constant(Number::integer(2))),
+        &NumericExpression::constant(Number::integer(3)),
+    );
+    assert!(nested_power.to_string().contains("6"));
+
+    let distributed_power = NumericExpression::power(
+        &(x.clone() * y.clone()),
+        &NumericExpression::constant(Number::integer(2)),
+    );
+    assert!(distributed_power.to_string().contains("x"));
+    assert!(distributed_power.to_string().contains("y"));
+
+    let flattened = (x.clone() + NumericExpression::constant(Number::integer(1))).flatten();
+    assert!(flattened.to_string().contains("x"));
+
+    let mut factor_target = left.clone();
+    factor_target.factor();
+    assert_eq!(factor_target.to_string(), left.to_string());
+
+    let piecewise_sub = left.substitute(&numeric_var("y"), Some(&NumericExpression::constant(Number::integer(9))));
+    assert_eq!(piecewise_sub.to_string(), left.to_string());
+}
+
+#[test]
 fn logical_expression_operations_cover_not_and_or_relation_and_substitute() {
     let x = NumericExpression::variable(numeric_var("x"));
     let y = NumericExpression::variable(numeric_var("y"));
@@ -80,6 +139,92 @@ fn logical_expression_operations_cover_not_and_or_relation_and_substitute() {
         ))),
     );
     assert!(substituted.to_string().contains("5"));
+}
+
+#[test]
+fn logical_expression_covers_remaining_not_or_and_substitute_paths() {
+    let x = NumericExpression::variable(numeric_var("x"));
+    let y = NumericExpression::variable(numeric_var("y"));
+    let flag = LogicalExpression::variable(bool_var("flag"));
+    let other_flag = LogicalExpression::variable(bool_var("other"));
+
+    assert_eq!(LogicalExpression::not(&LogicalExpression::constant(true)).to_string(), "false");
+    assert_eq!(LogicalExpression::not(&LogicalExpression::not(&flag)).to_string(), "flag");
+    assert!(LogicalExpression::not(&(flag.clone() & other_flag.clone()))
+        .to_string()
+        .contains("OR"));
+    assert!(LogicalExpression::not(&(flag.clone() | other_flag.clone()))
+        .to_string()
+        .contains("AND"));
+
+    for (op, expected) in [
+        (Relation::Equal, "!="),
+        (Relation::NotEqual, "=="),
+        (Relation::LessThan, ">="),
+        (Relation::GreaterThan, "<="),
+        (Relation::LessEqual, ">"),
+        (Relation::GreaterEqual, "<"),
+    ] {
+        let relation = LogicalExpression::Relation {
+            left: Box::new(x.clone()),
+            operator: Symbol::Relation(op),
+            right: Box::new(y.clone()),
+        };
+        assert!(LogicalExpression::not(&relation).to_string().contains(expected));
+    }
+
+    assert_eq!(
+        LogicalExpression::and(&LogicalExpression::constant(false), &flag).to_string(),
+        "(false AND flag)"
+    );
+    assert_eq!(
+        LogicalExpression::or(&LogicalExpression::constant(true), &flag).to_string(),
+        "(true OR flag)"
+    );
+    assert!(LogicalExpression::and(&(flag.clone() & flag.clone()), &flag)
+        .to_string()
+        .contains("AND"));
+    assert!(LogicalExpression::or(&(flag.clone() | flag.clone()), &flag)
+        .to_string()
+        .contains("OR"));
+
+    let untouched = flag.substitute(&numeric_var("x"), None);
+    assert_eq!(untouched.to_string(), "flag");
+}
+
+#[test]
+fn logical_expression_covers_error_and_grouping_edge_cases() {
+    let x = NumericExpression::variable(numeric_var("x"));
+    let y = NumericExpression::variable(numeric_var("y"));
+    let flag = LogicalExpression::variable(bool_var("flag"));
+    let other = LogicalExpression::variable(bool_var("other"));
+
+    let and_group = LogicalExpression::and(&(flag.clone() & other.clone()), &(flag.clone() & other.clone()));
+    assert!(and_group.to_string().contains("AND"));
+
+    let or_group = LogicalExpression::or(&(flag.clone() | other.clone()), &(flag.clone() | other.clone()));
+    assert!(or_group.to_string().contains("OR"));
+
+    let none_sub = LogicalExpression::relation(&x, &Symbol::Relation(Relation::Equal), &y)
+        .substitute(&bool_var("missing"), None);
+    assert!(none_sub.to_string().contains("x"));
+
+    assert!(catch_unwind(AssertUnwindSafe(|| {
+        LogicalExpression::not(&LogicalExpression::Relation {
+            left: Box::new(x.clone()),
+            operator: Symbol::Binary(symbolix_core::lexer::symbol::Binary::Add),
+            right: Box::new(y.clone()),
+        })
+    }))
+    .is_err());
+
+    assert!(catch_unwind(AssertUnwindSafe(|| {
+        flag.substitute(
+            &bool_var("flag"),
+            Some(&SemanticExpression::numeric(NumericExpression::constant(Number::integer(1)))),
+        )
+    }))
+    .is_err());
 }
 
 #[test]

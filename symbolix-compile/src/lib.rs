@@ -12,11 +12,14 @@ use crate::expand::{
     compile_formula, compile_symbolix, normalize_formula_input, normalize_symbolix_input,
     panic_to_compile_error,
 };
-use symbolix_core::{equation::SolutionSet, semantic::semantic_ir::SemanticExpression};
+use symbolix_core::{
+    equation::SolutionSet, semantic::semantic_ir::SemanticExpression, semantic::variable::Variable,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) enum CompileValue {
     Semantic(SemanticExpression),
+    Variable(Variable),
     SolutionSet(SolutionSet),
 }
 

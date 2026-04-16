@@ -290,9 +290,7 @@ pub fn convert_expr(
                             )),
                         };
 
-                        Ok(CompileValue::Semantic(SemanticExpression::numeric(
-                            NumericExpression::variable(variable),
-                        )))
+                        Ok(CompileValue::Variable(variable))
                     }
                     "expr" => {
                         let args: LitStr = syn::parse2(tokens)?;
@@ -357,9 +355,16 @@ pub fn convert_expr(
                                 )
                             })?;
                             let solve_for = match solve_ir {
-                                CompileValue::Semantic(SemanticExpression::Numeric(
-                                    NumericExpression::Variable(variable),
-                                )) => variable.clone(),
+                                CompileValue::Variable(variable)
+                                    if matches!(
+                                        variable.var_type,
+                                        VariableType::Integer
+                                            | VariableType::Float
+                                            | VariableType::Fraction
+                                    ) =>
+                                {
+                                    variable.clone()
+                                }
                                 _ => {
                                     return Err(syn::Error::new_spanned(
                                         solve_arg,
@@ -691,6 +696,7 @@ fn handle_block_in_if(
 fn expect_semantic(value: CompileValue, span: &impl Spanned) -> syn::Result<SemanticExpression> {
     match value {
         CompileValue::Semantic(expr) => Ok(expr),
+        CompileValue::Variable(variable) => Ok(variable.as_expression()),
         CompileValue::SolutionSet(_) => Err(syn::Error::new(
             span.span(),
             "solution sets cannot participate in expression arithmetic inside symbolix!",

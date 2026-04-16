@@ -34,6 +34,23 @@ fn symbolix_supports_if_blocks_and_tuple_returns() {
 }
 
 #[test]
+fn symbolix_supports_boolean_variable_conditions() {
+    let compiled = symbolix! {
+        let cond = var!("cond", bool);
+        let x = var!("x", f64);
+        let expr = if cond {
+            x + 1
+        } else {
+            x - 1
+        };
+        expr
+    };
+
+    assert_eq!(compiled.calculate(true, 3.0), 4.0);
+    assert_eq!(compiled.calculate(false, 3.0), 2.0);
+}
+
+#[test]
 fn symbolix_supports_expr_macro_and_relation_methods() {
     let compiled = symbolix! {
         let x = var!("x", f64);

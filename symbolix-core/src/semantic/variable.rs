@@ -53,6 +53,10 @@ impl Variable {
         }
     }
 
+    pub fn as_expression(&self) -> SemanticExpression {
+        self.to_expression()
+    }
+
     pub fn get_value(&self) -> Option<Constant> {
         self.value.clone()
     }

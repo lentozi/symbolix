@@ -87,6 +87,7 @@ pub fn get_func_arguments(values: &[CompileValue]) -> (Vec<Ident>, Vec<TokenStre
 fn collect_value_variables(value: &CompileValue, variables: &mut Vec<Variable>) {
     match value {
         CompileValue::Semantic(expr) => collect_semantic_variables(expr, variables),
+        CompileValue::Variable(variable) => push_variable(variable, variables),
         CompileValue::SolutionSet(solution_set) => collect_solution_set_variables(solution_set, variables),
     }
 }
@@ -168,6 +169,12 @@ pub fn get_func_return_type(value: &CompileValue) -> TokenStream {
                 quote! { bool }
             }
         }
+        CompileValue::Variable(variable) => match variable.var_type {
+            VariableType::Float | VariableType::Fraction => quote! { f64 },
+            VariableType::Integer => quote! { i32 },
+            VariableType::Boolean => quote! { bool },
+            VariableType::Unknown => panic!("invalid variable type"),
+        },
         CompileValue::SolutionSet(_) => quote! { #equation::SolutionSet },
     }
 }
@@ -196,6 +203,7 @@ pub fn multi_codegen_values(
 pub fn codegen_value(value: &CompileValue) -> TokenStream {
     match value {
         CompileValue::Semantic(expr) => codegen_semantic(expr),
+        CompileValue::Variable(variable) => codegen_semantic(&variable.as_expression()),
         CompileValue::SolutionSet(solution_set) => codegen_solution_set(solution_set),
     }
 }

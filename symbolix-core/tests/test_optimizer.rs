@@ -3,7 +3,8 @@ use symbolix_core::{
         constant::Number,
         symbol::{Relation, Symbol},
     },
-    optimizer::{flatten_numeric, normalize_logic, normalize_numeric, optimize},
+    optimizer::{flatten_numeric, normalize, normalize_logic, normalize_numeric, optimize},
+    optimizer::testing::factor,
     semantic::{
         semantic_ir::{logic::LogicalExpression, numeric::NumericExpression, SemanticExpression},
         variable::{Variable, VariableType},
@@ -14,6 +15,14 @@ fn numeric_var(name: &str) -> Variable {
     Variable {
         name: name.to_string(),
         var_type: VariableType::Float,
+        value: None,
+    }
+}
+
+fn bool_var(name: &str) -> Variable {
+    Variable {
+        name: name.to_string(),
+        var_type: VariableType::Boolean,
         value: None,
     }
 }
@@ -81,4 +90,68 @@ fn normalize_logic_and_optimize_fold_constant_relations() {
     ));
     optimize(&mut semantic);
     assert_eq!(format!("{}", semantic), "true");
+}
+
+#[test]
+fn normalize_numeric_and_logic_cover_singleton_and_zero_paths() {
+    let x = NumericExpression::variable(numeric_var("x"));
+
+    let mut add_single = NumericExpression::Addition(symbolix_core::numeric_bucket![
+        NumericExpression::constant(Number::integer(0)),
+        x.clone()
+    ]);
+    normalize_numeric(&mut add_single);
+    assert_eq!(add_single.to_string(), "x");
+
+    let mut mul_zero = NumericExpression::Multiplication(symbolix_core::numeric_bucket![
+        NumericExpression::constant(Number::integer(0)),
+        x.clone()
+    ]);
+    normalize_numeric(&mut mul_zero);
+    assert_eq!(mul_zero.to_string(), "0");
+
+    let mut mul_single = NumericExpression::Multiplication(symbolix_core::numeric_bucket![
+        NumericExpression::constant(Number::integer(1)),
+        x.clone()
+    ]);
+    normalize_numeric(&mut mul_single);
+    assert_eq!(mul_single.to_string(), "x");
+
+    let mut and_single = LogicalExpression::And(symbolix_core::logical_bucket![
+        LogicalExpression::constant(true),
+        LogicalExpression::variable(bool_var("flag"))
+    ]);
+    normalize_logic(&mut and_single);
+    assert_eq!(and_single.to_string(), "flag");
+
+    let mut relation = LogicalExpression::Relation {
+        left: Box::new(NumericExpression::constant(Number::integer(2))),
+        operator: Symbol::Relation(Relation::GreaterThan),
+        right: Box::new(NumericExpression::constant(Number::integer(1))),
+    };
+    normalize_logic(&mut relation);
+    assert_eq!(relation.to_string(), "true");
+}
+
+#[test]
+fn normalize_and_factor_dispatch_over_semantic_expression() {
+    let mut numeric = SemanticExpression::numeric(NumericExpression::Addition(
+        symbolix_core::numeric_bucket![
+            NumericExpression::constant(Number::integer(0)),
+            NumericExpression::variable(numeric_var("x"))
+        ],
+    ));
+    normalize(&mut numeric);
+    factor(&mut numeric);
+    assert_eq!(numeric.to_string(), "x");
+
+    let mut logical = SemanticExpression::logical(LogicalExpression::And(
+        symbolix_core::logical_bucket![
+            LogicalExpression::constant(true),
+            LogicalExpression::variable(bool_var("flag"))
+        ],
+    ));
+    normalize(&mut logical);
+    factor(&mut logical);
+    assert_eq!(logical.to_string(), "flag");
 }

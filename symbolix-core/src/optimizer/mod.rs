@@ -21,6 +21,7 @@ pub use normalize::{normalize, normalize_logic, normalize_numeric};
 
 #[doc(hidden)]
 pub mod testing {
+    pub use super::factor::{factor, factor_logic, factor_numeric};
     pub use super::optimize_d1::{optimize_d1, optimize_logic_d1, optimize_numeric_d1};
     pub use super::optimize_term::{
         extract_addition_term, extract_logical_term, extract_multiply_term, rebuild_addition_term,
