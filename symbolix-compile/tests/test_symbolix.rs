@@ -60,3 +60,27 @@ fn symbolix_supports_expr_macro_and_relation_methods() {
 
     assert!(compiled.calculate(10.0));
 }
+
+#[test]
+fn solution_set_does_not_duplicate_branch_constraints() {
+    let compiled = symbolix! {
+        let cond = var!("cond", bool);
+        let y = var!("z", f64);
+
+        let expr = if cond {
+            expr!("z - 20")
+        } else {
+            expr!("2 * z")
+        };
+
+        let expr = expr + y;
+        let equation = expr.equal_to(y);
+        solve!(equation, y)
+    };
+
+    let rendered = format!("{}", compiled.calculate(true));
+
+    assert!(rendered.contains("when cond"));
+    assert!(!rendered.contains("cond AND cond"));
+    assert!(!rendered.contains("NOT (cond) AND NOT (cond)"));
+}

@@ -103,7 +103,7 @@ impl Equation {
     pub fn solve(&self) -> Result<SolutionSet, SolveError> {
         let mut branches = Vec::new();
         for branch in PiecewiseSolver::expand(self)? {
-            let (branch_constraint, branch_expr) = piecewise::split_branch_equation(&branch);
+            let (_branch_constraint, branch_expr) = piecewise::split_branch_equation(&branch);
             let domain_constraint = collect_domain_constraint(&branch_expr);
             let solved = if LinearSolver::can_solve(&branch) {
                 LinearSolver::solve(&branch)?
@@ -118,8 +118,6 @@ impl Equation {
             for mut solved_branch in solved.branches {
                 solved_branch.constraint =
                     LogicalExpression::and(&solved_branch.constraint, &domain_constraint);
-                solved_branch.constraint =
-                    LogicalExpression::and(&solved_branch.constraint, &branch_constraint);
                 solved_branch = verify_branch(&branch.solve_for, &branch_expr, solved_branch)?;
                 if !matches!(solved_branch.result, BranchResult::Finite(ref values) if values.is_empty())
                 {
