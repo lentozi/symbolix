@@ -48,6 +48,15 @@ fn numeric_and_boolean_variables_convert_to_expected_expression_types() {
         SemanticExpression::Numeric(NumericExpression::Variable(_))
     ));
     assert!(matches!(
+        Variable {
+            name: "r".to_string(),
+            var_type: VariableType::Fraction,
+            value: None,
+        }
+        .as_expression(),
+        SemanticExpression::Numeric(NumericExpression::Variable(_))
+    ));
+    assert!(matches!(
         boolean_var("flag").to_expression(),
         SemanticExpression::Logical(LogicalExpression::Variable(_))
     ));
@@ -70,6 +79,11 @@ fn unknown_variable_cannot_convert_to_expression() {
 fn numeric_operations_and_operator_impls_produce_numeric_expressions() {
     let x = numeric_var("x");
     let y = numeric_var("y");
+    let frac = Variable {
+        name: "q".to_string(),
+        var_type: VariableType::Fraction,
+        value: None,
+    };
 
     assert_eq!(format!("{}", x.clone().addition(y.clone())), "(x + y)");
     assert_eq!(format!("{}", x.clone().subtraction(y.clone())), "(x + -(y))");
@@ -92,6 +106,10 @@ fn numeric_operations_and_operator_impls_produce_numeric_expressions() {
         ),
         "(1 + x)"
     );
+    assert!(matches!(
+        frac.to_expression(),
+        SemanticExpression::Numeric(NumericExpression::Variable(_))
+    ));
 }
 
 #[test]
@@ -108,6 +126,13 @@ fn logical_operations_and_operator_impls_produce_logical_expressions() {
         format!(
             "{}",
             left.clone().and_expr(SemanticExpression::logical(LogicalExpression::constant(true)))
+        ),
+        "left"
+    );
+    assert_eq!(
+        format!(
+            "{}",
+            left.clone().or_expr(SemanticExpression::logical(LogicalExpression::constant(false)))
         ),
         "left"
     );
@@ -133,6 +158,27 @@ fn invalid_variable_operations_panic() {
         catch_unwind(AssertUnwindSafe(|| num_var.clone().or_expr(SemanticExpression::logical(
             LogicalExpression::constant(true),
         )))),
+        catch_unwind(AssertUnwindSafe(|| num_var.clone().pow_expr(SemanticExpression::logical(
+            LogicalExpression::constant(true),
+        )))),
+        catch_unwind(AssertUnwindSafe(|| num_var.clone().not())),
+        catch_unwind(AssertUnwindSafe(|| bool_var.clone().sub_expr(SemanticExpression::numeric(
+            NumericExpression::constant(Number::integer(1)),
+        )))),
+        catch_unwind(AssertUnwindSafe(|| bool_var.clone().div_expr(SemanticExpression::numeric(
+            NumericExpression::constant(Number::integer(1)),
+        )))),
+        catch_unwind(AssertUnwindSafe(|| bool_var.clone().pow(bool_var.clone()))),
+        catch_unwind(AssertUnwindSafe(|| unknown.clone().mul_expr(SemanticExpression::numeric(
+            NumericExpression::constant(Number::integer(1)),
+        )))),
+        catch_unwind(AssertUnwindSafe(|| unknown.clone().div_expr(SemanticExpression::numeric(
+            NumericExpression::constant(Number::integer(1)),
+        )))),
+        catch_unwind(AssertUnwindSafe(|| unknown.clone().pow_expr(SemanticExpression::numeric(
+            NumericExpression::constant(Number::integer(1)),
+        )))),
+        catch_unwind(AssertUnwindSafe(|| unknown.clone().negation())),
     ] {
         assert!(operation.is_err());
     }

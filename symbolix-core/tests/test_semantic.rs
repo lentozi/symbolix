@@ -108,6 +108,48 @@ fn analyzer_covers_manual_expression_shapes_and_boolean_context() {
         let logical = analyzer.analyze_with_ctx(&logic_expr);
         assert!(matches!(logical, SemanticExpression::Logical(_)));
 
+        let add = Expression::binary(
+            Expression::constant(Constant::integer(1)),
+            Symbol::Binary(Binary::Add),
+            Expression::constant(Constant::integer(2)),
+        );
+        assert_eq!(analyzer.analyze_with_ctx(&add).to_string(), "3");
+
+        let sub = Expression::binary(
+            Expression::constant(Constant::integer(5)),
+            Symbol::Binary(Binary::Subtract),
+            Expression::constant(Constant::integer(2)),
+        );
+        assert_eq!(analyzer.analyze_with_ctx(&sub).to_string(), "3");
+
+        let mul = Expression::binary(
+            Expression::constant(Constant::integer(2)),
+            Symbol::Binary(Binary::Multiply),
+            Expression::constant(Constant::integer(3)),
+        );
+        assert_eq!(analyzer.analyze_with_ctx(&mul).to_string(), "6");
+
+        let div = Expression::binary(
+            Expression::constant(Constant::integer(6)),
+            Symbol::Binary(Binary::Divide),
+            Expression::constant(Constant::integer(2)),
+        );
+        assert_eq!(analyzer.analyze_with_ctx(&div).to_string(), "3");
+
+        let pow = Expression::binary(
+            Expression::constant(Constant::integer(2)),
+            Symbol::Binary(Binary::Power),
+            Expression::constant(Constant::integer(3)),
+        );
+        assert_eq!(analyzer.analyze_with_ctx(&pow).to_string(), "8");
+
+        let logic_or = Expression::binary(
+            Expression::constant(Constant::Boolean(false)),
+            Symbol::Binary(Binary::LogicOr),
+            Expression::constant(Constant::Boolean(true)),
+        );
+        assert_eq!(analyzer.analyze_with_ctx(&logic_or).to_string(), "true");
+
         let vars = with_compile_context!(ctx, ctx.collect_all_variables());
         assert!(vars.iter().any(|var| var.name == "flag" && var.var_type == VariableType::Boolean));
     }
@@ -146,5 +188,26 @@ fn analyzer_panics_on_invalid_manual_expressions() {
             Expression::constant(Constant::integer(1)),
         );
         assert!(catch_unwind(AssertUnwindSafe(|| analyzer.analyze_with_ctx(&invalid_unary_symbol))).is_err());
+
+        let invalid_minus = Expression::unary(
+            Symbol::Unary(Unary::Minus),
+            Expression::constant(Constant::Boolean(true)),
+        );
+        assert!(catch_unwind(AssertUnwindSafe(|| analyzer.analyze_with_ctx(&invalid_minus))).is_err());
+
+        let invalid_not = Expression::unary(
+            Symbol::Unary(Unary::LogicNot),
+            Expression::constant(Constant::integer(1)),
+        );
+        assert!(catch_unwind(AssertUnwindSafe(|| analyzer.analyze_with_ctx(&invalid_not))).is_err());
+
+        let invalid_ternary_shape = Expression::ternary(
+            Expression::constant(Constant::integer(1)),
+            Symbol::Ternary(Ternary::Conditional),
+            Expression::constant(Constant::integer(1)),
+            Symbol::Ternary(Ternary::ConditionalElse),
+            Expression::constant(Constant::integer(2)),
+        );
+        assert!(catch_unwind(AssertUnwindSafe(|| analyzer.analyze_with_ctx(&invalid_ternary_shape))).is_err());
     }
 }

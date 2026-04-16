@@ -144,7 +144,7 @@ pub fn parse_float_token(input: &str) -> IResult<&str, Token> {
 
                 // 消费该标识符部分，组合成非法片段
                 let mut ident_len_bytes = 0usize;
-                while let Some(c) = rest.chars().next() {
+                for c in rest.chars() {
                     if c.is_alphabetic() || c == '_' {
                         ident_len_bytes += c.len_utf8();
                     } else {

@@ -16,6 +16,20 @@ use crate::rust_expr::convert_block;
 use crate::CompileValue;
 use symbolix_core::semantic::Analyzer;
 
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else {
+        "symbolix-compile internal error".to_string()
+    }
+}
+
+pub(crate) fn normalize_symbolix_input_tokens(input: TokenStream2) -> String {
+    input.to_string()
+}
+
 pub(crate) fn compile_formula(input: TokenStream) -> syn::Result<TokenStream> {
     new_compile_context! {
         let input_lit = syn::parse::<LitStr>(input)?;
@@ -89,20 +103,39 @@ pub(crate) fn normalize_formula_input(input: TokenStream) -> syn::Result<String>
 
 pub(crate) fn normalize_symbolix_input(input: TokenStream) -> String {
     let input: TokenStream2 = input.into();
-    input.to_string()
+    normalize_symbolix_input_tokens(input)
 }
 
 pub(crate) fn panic_to_compile_error(payload: Box<dyn std::any::Any + Send>) -> TokenStream {
-    let message = if let Some(message) = payload.downcast_ref::<String>() {
-        message.clone()
-    } else if let Some(message) = payload.downcast_ref::<&str>() {
-        (*message).to_string()
-    } else {
-        "symbolix-compile internal error".to_string()
-    };
+    let message = panic_message(payload);
 
     quote! {
         compile_error!(#message);
     }
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proc_macro2::TokenStream as TokenStream2;
+    use quote::quote;
+
+    #[test]
+    fn normalize_symbolix_input_preserves_block_tokens() {
+        let input: TokenStream2 = quote! { let x = var!("x", f64); x };
+        let normalized = normalize_symbolix_input_tokens(input);
+        assert!(normalized.contains("let x"));
+        assert!(normalized.contains("var !"));
+    }
+
+    #[test]
+    fn panic_message_formats_known_and_unknown_payloads() {
+        assert_eq!(panic_message(Box::new(String::from("boom"))), "boom");
+        assert_eq!(panic_message(Box::new("kaboom")), "kaboom");
+        assert_eq!(
+            panic_message(Box::new(123_u32)),
+            "symbolix-compile internal error"
+        );
+    }
 }

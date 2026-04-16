@@ -83,3 +83,20 @@ fn push_error_queues_non_fatal_and_panics_on_fatal() {
 
     assert!(panic.is_err());
 }
+
+#[test]
+fn compile_context_exit_removes_current_stack_entry() {
+    let mut ctx = std::sync::Arc::new(CompileContext::new());
+    CompileContext::push_current(&ctx, |_| {
+        assert!(CompileContext::current().is_some());
+    });
+
+    let inner = std::sync::Arc::new(CompileContext::new());
+    CompileContext::push_current(&inner, |_| {
+        assert!(CompileContext::current().is_some());
+    });
+
+    let raw = std::sync::Arc::get_mut(&mut ctx).unwrap();
+    raw.exit();
+    assert!(CompileContext::current().is_none());
+}

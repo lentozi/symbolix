@@ -13,6 +13,11 @@ mod tools;
 
 pub use number_trait::NumberTrait;
 
+#[doc(hidden)]
+pub mod testing {
+    pub use super::tools::{parse_float_token, parse_token};
+}
+
 /// 词法分析器，支持流式输出 token 和输出 token 数组
 pub struct Lexer {
     remaining: String,

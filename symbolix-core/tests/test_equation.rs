@@ -1,5 +1,9 @@
 use symbolix_core::{
-    equation::{BranchResult, Equation, PolynomialForm, PolynomialSolver, SolutionBranch, SolutionSet, SolveError, Solver},
+    equation::{testing::{
+        collect_domain_constraint_public, collect_logical_variables_public, collect_numeric_variables_public,
+        constraint_allows_identity_public, contains_target_public, dedup_solutions_public,
+        is_zero_public, logical_is_not_false_public, verify_branch_public, verify_solution_public,
+    }, BranchResult, Equation, LinearForm, LinearSolver, PolynomialForm, PolynomialSolver, SolutionBranch, SolutionSet, SolveError, Solver},
     lexer::{
         constant::Number,
         symbol::{Relation, Symbol},
@@ -588,4 +592,146 @@ fn polynomial_solver_can_solve_and_rejects_non_quadratic_cases() {
         PolynomialSolver::solve(&degenerate_quadratic),
         Err(SolveError::NonPolynomialExpression)
     ));
+}
+
+#[test]
+fn linear_form_extract_and_solver_cover_remaining_branches() {
+    let x = numeric_var("x");
+    let y = numeric_var("y");
+
+    let direct = LinearForm::extract(&NumericExpression::variable(x.clone()), &x).unwrap();
+    assert_eq!(direct.coef.to_string(), "1");
+    assert_eq!(direct.constant.to_string(), "0");
+
+    let parameter = LinearForm::extract(&NumericExpression::variable(y.clone()), &x).unwrap();
+    assert_eq!(parameter.coef.to_string(), "0");
+    assert_eq!(parameter.constant.to_string(), "y");
+
+    let powered = LinearForm::extract(
+        &NumericExpression::power(
+            &NumericExpression::variable(x.clone()),
+            &NumericExpression::constant(Number::integer(1)),
+        ),
+        &x,
+    )
+    .unwrap();
+    assert_eq!(powered.coef.to_string(), "1");
+
+    assert!(LinearForm::extract(
+        &NumericExpression::power(
+            &NumericExpression::variable(x.clone()),
+            &NumericExpression::constant(Number::integer(2)),
+        ),
+        &x,
+    )
+    .is_none());
+
+    let identity_eq = Equation {
+        expr: NumericExpression::constant(Number::integer(0)),
+        solve_for: x.clone(),
+    };
+    let identity = LinearSolver::solve(&identity_eq).unwrap();
+    assert!(identity.has_identity_branch());
+
+    let impossible_eq = Equation {
+        expr: NumericExpression::constant(Number::integer(1)),
+        solve_for: x.clone(),
+    };
+    let impossible = LinearSolver::solve(&impossible_eq).unwrap();
+    assert!(impossible.is_empty());
+}
+
+#[test]
+fn equation_helpers_cover_contains_target_and_branch_shapes() {
+    let x = numeric_var("x");
+    let expr = NumericExpression::power(
+        &(NumericExpression::variable(x.clone()) + NumericExpression::constant(Number::integer(1))),
+        &NumericExpression::constant(Number::integer(1)),
+    );
+    let equation = Equation {
+        expr: expr.clone(),
+        solve_for: x.clone(),
+    };
+    assert!(LinearSolver::can_solve(&equation));
+    assert!(!PolynomialSolver::can_solve(&equation));
+
+    let branch = SolutionBranch::finite(
+        LogicalExpression::constant(true),
+        vec![
+            NumericExpression::constant(Number::integer(1)),
+            NumericExpression::constant(Number::integer(1)),
+            NumericExpression::constant(Number::integer(2)),
+        ],
+    );
+    let BranchResult::Finite(values) = branch.result else {
+        panic!("expected finite branch");
+    };
+    assert_eq!(values.len(), 2);
+}
+
+#[test]
+fn equation_internal_helper_rules_cover_domain_collection_and_dedup() {
+    let x = numeric_var("x");
+    let a = numeric_var("a");
+    let expr = NumericExpression::power(
+        &(NumericExpression::variable(x.clone()) + NumericExpression::constant(Number::integer(1))),
+        &NumericExpression::constant(Number::integer(-1)),
+    );
+    assert!(!is_zero_public(&expr));
+    assert!(contains_target_public(&expr, &x));
+
+    let domain = collect_domain_constraint_public(&expr);
+    assert!(domain.to_string().contains("!="));
+
+    let piecewise = NumericExpression::Piecewise {
+        cases: vec![(
+            LogicalExpression::relation(
+                &NumericExpression::variable(a.clone()),
+                &Symbol::Relation(Relation::GreaterThan),
+                &NumericExpression::constant(Number::integer(0)),
+            ),
+            NumericExpression::variable(x.clone()),
+        )],
+        otherwise: Some(Box::new(NumericExpression::constant(Number::integer(1)))),
+    };
+    let vars = collect_numeric_variables_public(&piecewise);
+    assert!(vars.contains(&x));
+    assert!(vars.contains(&a));
+
+    let logical_vars = collect_logical_variables_public(&LogicalExpression::relation(
+        &NumericExpression::variable(x.clone()),
+        &Symbol::Relation(Relation::Equal),
+        &NumericExpression::variable(a.clone()),
+    ));
+    assert!(logical_vars.contains(&x));
+    assert!(logical_vars.contains(&a));
+
+    assert!(constraint_allows_identity_public(&LogicalExpression::constant(true)));
+    assert!(!logical_is_not_false_public(&LogicalExpression::constant(false)));
+
+    let deduped = dedup_solutions_public(vec![
+        NumericExpression::constant(Number::integer(1)),
+        NumericExpression::constant(Number::integer(1)),
+        NumericExpression::constant(Number::integer(2)),
+    ]);
+    assert_eq!(deduped.len(), 2);
+
+    let false_identity = verify_branch_public(
+        &x,
+        &NumericExpression::constant(Number::integer(0)),
+        SolutionBranch::identity(LogicalExpression::constant(false)),
+    )
+    .unwrap();
+    let BranchResult::Finite(values) = false_identity.result else {
+        panic!("expected filtered identity branch");
+    };
+    assert!(values.is_empty());
+
+    let invalid_solution = verify_solution_public(
+        &x,
+        &(&NumericExpression::variable(x.clone()) - NumericExpression::constant(Number::integer(2))),
+        &LogicalExpression::constant(true),
+        &NumericExpression::constant(Number::integer(1)),
+    );
+    assert!(!invalid_solution);
 }

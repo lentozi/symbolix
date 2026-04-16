@@ -95,3 +95,30 @@ fn solve_returns_vector_for_multiple_roots() {
     result.sort_by(|a, b| a.partial_cmp(b).unwrap());
     assert_eq!(result, vec![-1.0, 1.0]);
 }
+
+#[test]
+fn symbolix_can_return_boolean_and_numeric_tuple_without_free_vars() {
+    let compiled = symbolix! {
+        let x = var!("x", f64);
+        let zero = expr!("0");
+        let check = x.greater_than(zero);
+        let shifted = x + 2;
+        (check, shifted)
+    };
+
+    assert_eq!(compiled.calculate(3.0), (true, 5.0));
+    assert_eq!(compiled.calculate(-1.0), (false, 1.0));
+}
+
+#[test]
+fn symbolix_solve_without_explicit_target_infers_single_variable() {
+    let compiled = symbolix! {
+        let x = var!("x", f64);
+        let lhs = expr!("2 * x + 4");
+        let rhs = expr!("0");
+        let equation = lhs.equal_to(rhs);
+        solve!(equation)
+    };
+
+    assert_eq!(compiled.calculate(), -2.0);
+}

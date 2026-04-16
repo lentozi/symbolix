@@ -13,8 +13,7 @@ fn make_temp_crate_dir() -> PathBuf {
     std::env::temp_dir().join(format!("symbolix_compile_fail_{unique}"))
 }
 
-#[test]
-fn symbolix_reports_errors_inside_macro_body() {
+fn write_temp_crate(main_rs: &str) -> PathBuf {
     let temp_dir = make_temp_crate_dir();
     let crate_dir = temp_dir.join("case");
     let src_dir = crate_dir.join("src");
@@ -41,19 +40,12 @@ symbolix-compile = {{ path = "{manifest_dir}" }}
     )
     .expect("failed to write Cargo.toml");
 
-    fs::write(
-        src_dir.join("main.rs"),
-        r#"use symbolix_compile::symbolix;
-
-fn main() {
-    let _ = symbolix! {
-        solve!(missing)
-    };
+    fs::write(src_dir.join("main.rs"), main_rs).expect("failed to write main.rs");
+    temp_dir
 }
-"#,
-    )
-    .expect("failed to write main.rs");
 
+fn cargo_check_stderr(temp_dir: &PathBuf) -> String {
+    let crate_dir = temp_dir.join("case");
     let output = Command::new("cargo")
         .arg("check")
         .current_dir(&crate_dir)
@@ -67,7 +59,22 @@ fn main() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+#[test]
+fn symbolix_reports_errors_inside_macro_body() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        solve!(missing)
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
     assert!(
         stderr.contains("undefined binding `missing` in symbolix! block"),
         "missing error message in stderr:\n{stderr}"
@@ -81,5 +88,120 @@ fn main() {
         "error was not highlighted on the macro body token:\n{stderr}"
     );
 
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn symbolix_reports_missing_else_branch() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        let x = var!("x", f64);
+        let zero = expr!("0");
+        if x.greater_than(zero) {
+            x
+        }
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
+    assert!(stderr.contains("requires an else branch"), "stderr:\n{stderr}");
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn symbolix_reports_unsupported_equation_method_call() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        let x = var!("x", f64);
+        let equation = x.equal_to(x);
+        equation.solve()
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
+    assert!(stderr.contains("use solve!(equation)"), "stderr:\n{stderr}");
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn symbolix_reports_non_identifier_let_pattern() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        let (x, y) = (expr!("1"), expr!("2"));
+        x
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
+    assert!(stderr.contains("only supports identifier bindings"), "stderr:\n{stderr}");
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn symbolix_reports_invalid_var_type() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        let x = var!("x", String);
+        x
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
+    assert!(stderr.contains("var! only supports"), "stderr:\n{stderr}");
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn symbolix_reports_method_receiver_must_be_named_binding() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        (expr!("1") + expr!("2")).greater_than(expr!("0"))
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
+    assert!(stderr.contains("method receiver in symbolix! must be a named binding"), "stderr:\n{stderr}");
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn symbolix_reports_solution_sets_cannot_participate_in_arithmetic() {
+    let temp_dir = write_temp_crate(
+        r#"use symbolix_compile::symbolix;
+
+fn main() {
+    let _ = symbolix! {
+        let x = var!("x", f64);
+        let lhs = expr!("x ^ 2 - 1");
+        let rhs = expr!("0");
+        let equation = lhs.equal_to(rhs);
+        let solved = solve!(equation, x);
+        solved + x
+    };
+}
+"#,
+    );
+    let stderr = cargo_check_stderr(&temp_dir);
+    assert!(stderr.contains("solution sets cannot participate"), "stderr:\n{stderr}");
     let _ = fs::remove_dir_all(&temp_dir);
 }

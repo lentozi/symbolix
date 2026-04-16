@@ -453,4 +453,164 @@ pub fn generate_struct(
     }.into()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+    use symbolix_core::lexer::constant::Number;
+
+    fn numeric_var(name: &str, ty: VariableType) -> Variable {
+        Variable {
+            name: name.to_string(),
+            var_type: ty,
+            value: None,
+        }
+    }
+
+    #[test]
+    fn get_func_arguments_collects_variables_from_all_compile_values() {
+        let x = numeric_var("x", VariableType::Float);
+        let y = numeric_var("y", VariableType::Integer);
+        let flag = numeric_var("flag", VariableType::Boolean);
+        let values = vec![
+            CompileValue::Variable(x.clone()),
+            CompileValue::Semantic(SemanticExpression::numeric(
+                NumericExpression::variable(y.clone())
+                    + NumericExpression::constant(Number::integer(1)),
+            )),
+            CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::variable(
+                flag.clone(),
+            ))),
+        ];
+
+        let (names, types) = get_func_arguments(&values);
+        let names = names.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
+        let types = types.into_iter().map(|ts| ts.to_string()).collect::<Vec<_>>();
+        assert_eq!(names, vec!["flag", "x", "y"]);
+        assert_eq!(types, vec!["bool", "f64", "i32"]);
+    }
+
+    #[test]
+    fn solution_set_arguments_do_not_include_target_variable() {
+        let x = numeric_var("x", VariableType::Float);
+        let a = numeric_var("a", VariableType::Float);
+        let solution_set = SolutionSet {
+            target: x,
+            branches: vec![symbolix_core::equation::SolutionBranch {
+                constraint: LogicalExpression::relation(
+                    &NumericExpression::variable(a.clone()),
+                    &Symbol::Relation(Relation::GreaterThan),
+                    &NumericExpression::constant(Number::integer(0)),
+                ),
+                result: BranchResult::Finite(vec![NumericExpression::constant(Number::integer(1))]),
+            }],
+        };
+
+        let (names, _) = get_func_arguments(&[CompileValue::SolutionSet(solution_set)]);
+        assert_eq!(
+            names.into_iter().map(|id| id.to_string()).collect::<Vec<_>>(),
+            vec!["a"]
+        );
+    }
+
+    #[test]
+    fn return_types_and_codegen_cover_scalar_vector_and_identity_solution_sets() {
+        let x = numeric_var("x", VariableType::Float);
+        let scalar = SolutionSet {
+            target: x.clone(),
+            branches: vec![symbolix_core::equation::SolutionBranch::finite(
+                LogicalExpression::constant(true),
+                vec![NumericExpression::constant(Number::integer(1))],
+            )],
+        };
+        assert_eq!(
+            get_func_return_type(&CompileValue::SolutionSet(scalar.clone())).to_string(),
+            "f64"
+        );
+        assert!(codegen_value(&CompileValue::SolutionSet(scalar))
+            .to_string()
+            .contains("if"));
+
+        let vector = SolutionSet {
+            target: x.clone(),
+            branches: vec![symbolix_core::equation::SolutionBranch::finite(
+                LogicalExpression::constant(true),
+                vec![
+                    NumericExpression::constant(Number::integer(1)),
+                    NumericExpression::constant(Number::integer(2)),
+                ],
+            )],
+        };
+        assert_eq!(
+            get_func_return_type(&CompileValue::SolutionSet(vector.clone())).to_string(),
+            "Vec < f64 >"
+        );
+        assert!(codegen_value(&CompileValue::SolutionSet(vector))
+            .to_string()
+            .contains("vec !"));
+
+        let identity = SolutionSet {
+            target: x,
+            branches: vec![symbolix_core::equation::SolutionBranch::identity(
+                LogicalExpression::constant(true),
+            )],
+        };
+        let panic = std::panic::catch_unwind(|| {
+            let _ = get_func_return_type(&CompileValue::SolutionSet(identity));
+        });
+        assert!(panic.is_err());
+    }
+
+    #[test]
+    fn codegen_numeric_and_logical_cover_empty_and_piecewise_shapes() {
+        let numeric_empty_add = NumericExpression::Addition(symbolix_core::numeric_bucket![]);
+        let numeric_empty_mul = NumericExpression::Multiplication(symbolix_core::numeric_bucket![]);
+        assert_eq!(codegen_numeric(&numeric_empty_add).to_string(), "0.0");
+        assert!(codegen_numeric(&numeric_empty_mul).to_string().contains("1.0"));
+
+        let piecewise = NumericExpression::Piecewise {
+            cases: vec![(
+                LogicalExpression::constant(true),
+                NumericExpression::constant(Number::integer(4)),
+            )],
+            otherwise: None,
+        };
+        assert!(codegen_numeric(&piecewise).to_string().contains("NAN"));
+
+        let logical_empty_and = LogicalExpression::And(symbolix_core::logical_bucket![]);
+        let logical_empty_or = LogicalExpression::Or(symbolix_core::logical_bucket![]);
+        assert_eq!(codegen_logical(&logical_empty_and).to_string(), "true");
+        assert_eq!(codegen_logical(&logical_empty_or).to_string(), "false");
+    }
+
+    #[test]
+    fn generate_struct_and_multi_codegen_values_emit_expected_shape() {
+        let names = vec![format_ident!("x"), format_ident!("y")];
+        let types = vec![quote! { f64 }, quote! { bool }];
+        let generated = generate_struct(
+            names.clone(),
+            types,
+            quote! { (f64, bool) },
+            quote! { (x + 1.0, y) },
+        );
+        let rendered = generated.to_string();
+        assert!(rendered.contains("CompiledFormula"));
+        assert!(rendered.contains("calculate"));
+        assert!(rendered.contains("to_closure"));
+
+        let tuple_code = multi_codegen_values(
+            &vec![
+                CompileValue::Semantic(SemanticExpression::numeric(NumericExpression::constant(
+                    Number::integer(1),
+                ))),
+                CompileValue::Semantic(SemanticExpression::logical(LogicalExpression::constant(
+                    true,
+                ))),
+            ],
+            &names,
+        );
+        assert!(tuple_code.to_string().contains("let x"));
+    }
+}
+
 

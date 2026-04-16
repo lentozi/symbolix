@@ -121,6 +121,83 @@ fn numeric_expression_covers_piecewise_pairwise_composition_and_factor_hooks() {
 }
 
 #[test]
+fn numeric_expression_covers_none_otherwise_and_empty_bucket_substitution_defaults() {
+    let x = NumericExpression::variable(numeric_var("x"));
+    let piecewise = NumericExpression::piecewise(
+        vec![(
+            LogicalExpression::constant(true),
+            NumericExpression::piecewise(
+                vec![(LogicalExpression::constant(true), x.clone())],
+                Some(NumericExpression::constant(Number::integer(3))),
+            ),
+        )],
+        None,
+    );
+    let rendered = piecewise.to_string();
+    assert!(rendered.contains("x"));
+    assert!(!rendered.contains("other;"));
+
+    let empty_add = NumericExpression::Addition(symbolix_core::numeric_bucket![]);
+    let empty_mul = NumericExpression::Multiplication(symbolix_core::numeric_bucket![]);
+    assert_eq!(
+        empty_add
+            .substitute(&numeric_var("x"), Some(&NumericExpression::constant(Number::integer(1))))
+            .to_string(),
+        "0"
+    );
+    assert_eq!(
+        empty_mul
+            .substitute(&numeric_var("x"), Some(&NumericExpression::constant(Number::integer(1))))
+            .to_string(),
+        "1"
+    );
+}
+
+#[test]
+fn numeric_expression_covers_one_sided_piecewise_and_bucket_mixing_paths() {
+    let x = NumericExpression::variable(numeric_var("x"));
+    let y = NumericExpression::variable(numeric_var("y"));
+    let cond = LogicalExpression::relation(
+        &x,
+        &Symbol::Relation(Relation::GreaterThan),
+        &NumericExpression::constant(Number::integer(0)),
+    );
+    let piecewise = NumericExpression::piecewise(
+        vec![(cond.clone(), x.clone())],
+        Some(NumericExpression::constant(Number::integer(2))),
+    );
+
+    let add_left = NumericExpression::addition(&piecewise, &y);
+    let add_right = NumericExpression::addition(&y, &piecewise);
+    let mul_left = NumericExpression::multiplication(&piecewise, &y);
+    let mul_right = NumericExpression::multiplication(&y, &piecewise);
+    assert!(add_left.to_string().contains("y"));
+    assert!(add_right.to_string().contains("y"));
+    assert!(mul_left.to_string().contains("y"));
+    assert!(mul_right.to_string().contains("y"));
+
+    let add_addition = NumericExpression::addition(
+        &NumericExpression::Addition(symbolix_core::numeric_bucket![x.clone()]),
+        &NumericExpression::constant(Number::integer(3)),
+    );
+    assert!(add_addition.to_string().contains("3"));
+
+    let mul_mult = NumericExpression::multiplication(
+        &NumericExpression::Multiplication(symbolix_core::numeric_bucket![x.clone()]),
+        &NumericExpression::constant(Number::integer(3)),
+    );
+    assert!(mul_mult.to_string().contains("3"));
+
+    let neg_piecewise = NumericExpression::negation(&piecewise);
+    assert!(neg_piecewise.to_string().contains("-("));
+    let neg_power = NumericExpression::negation(&NumericExpression::power(
+        &x,
+        &NumericExpression::constant(Number::integer(2)),
+    ));
+    assert!(neg_power.to_string().contains("-("));
+}
+
+#[test]
 fn logical_expression_operations_cover_not_and_or_relation_and_substitute() {
     let x = NumericExpression::variable(numeric_var("x"));
     let y = NumericExpression::variable(numeric_var("y"));
@@ -225,6 +302,21 @@ fn logical_expression_covers_error_and_grouping_edge_cases() {
         )
     }))
     .is_err());
+
+    let empty_and = LogicalExpression::And(symbolix_core::logical_bucket![]);
+    let empty_or = LogicalExpression::Or(symbolix_core::logical_bucket![]);
+    assert_eq!(
+        empty_and
+            .substitute(&bool_var("flag"), Some(&SemanticExpression::logical(LogicalExpression::constant(true))))
+            .to_string(),
+        "true"
+    );
+    assert_eq!(
+        empty_or
+            .substitute(&bool_var("flag"), Some(&SemanticExpression::logical(LogicalExpression::constant(true))))
+            .to_string(),
+        "false"
+    );
 }
 
 #[test]

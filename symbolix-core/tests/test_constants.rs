@@ -123,3 +123,26 @@ fn constant_boolean_and_invalid_numeric_operations_cover_panics() {
         assert!(panic.is_err());
     }
 }
+
+#[test]
+fn number_overflow_and_display_edge_cases_are_covered() {
+    let overflow_add = Number::addition(&Number::integer(i64::MAX), &Number::integer(1));
+    assert!(matches!(overflow_add, Number::Float(_)));
+
+    let overflow_mul = catch_unwind(AssertUnwindSafe(|| {
+        Number::multiplication(&Number::integer(i64::MAX), &Number::integer(2))
+    }));
+    assert!(overflow_mul.is_err());
+
+    let int_like_fraction = Number::fraction(4, 2);
+    assert_eq!(format!("{}", int_like_fraction), "4/2");
+    let int_like_fraction_num = if let Number::Fraction(frac) = int_like_fraction.clone() {
+        format!("{}", frac)
+    } else {
+        unreachable!()
+    };
+    assert_eq!(int_like_fraction_num, "4/2");
+
+    assert!(Number::integer(3) >= 3_i64);
+    assert!(Number::float(2.0) < 3_i64);
+}

@@ -47,6 +47,15 @@ where
     Ok(tokens)
 }
 
+fn parse_cached_tokens(rendered: &str, cache_file: &Path) -> syn::Result<TokenStream> {
+    rendered.parse().map_err(|err| {
+        syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!("failed to parse cache file {}: {err}", cache_file.display()),
+        )
+    })
+}
+
 fn read_disk_cache(
     cache_root: &Path,
     macro_name: &str,
@@ -64,12 +73,7 @@ fn read_disk_cache(
         )
     })?;
 
-    rendered.parse().map(Some).map_err(|err| {
-        syn::Error::new(
-            proc_macro2::Span::call_site(),
-            format!("failed to parse cache file {}: {err}", cache_file.display()),
-        )
-    })
+    parse_cached_tokens(&rendered, &cache_file).map(Some)
 }
 
 fn write_disk_cache(cache_root: &Path, macro_name: &str, disk_key: &str, rendered: &str) {
@@ -171,4 +175,92 @@ fn stable_hash(value: &str) -> String {
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proc_macro2::TokenStream as TokenStream2;
+    use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+
+    fn temp_dir() -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("symbolix_compile_cache_unit_{unique}"))
+    }
+
+    #[test]
+    fn stable_hash_is_deterministic() {
+        assert_eq!(stable_hash("symbolix"), stable_hash("symbolix"));
+        assert_ne!(stable_hash("symbolix"), stable_hash("formula"));
+    }
+
+    #[test]
+    fn env_flag_enabled_accepts_expected_values() {
+        for value in ["1", "true", "TRUE", "yes", "YES", "on", "ON"] {
+            std::env::set_var("SYMBOLIX_TEST_FLAG", value);
+            assert!(env_flag_enabled("SYMBOLIX_TEST_FLAG"));
+        }
+        std::env::set_var("SYMBOLIX_TEST_FLAG", "0");
+        assert!(!env_flag_enabled("SYMBOLIX_TEST_FLAG"));
+        std::env::remove_var("SYMBOLIX_TEST_FLAG");
+    }
+
+    #[test]
+    fn cache_file_path_and_disk_roundtrip_work() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let cache_path = cache_file_path(&dir, "formula", "abc");
+        assert!(cache_path.ends_with("formula-abc.tok"));
+
+        write_disk_cache(&dir, "formula", "abc", "1 + 2");
+        let rendered = fs::read_to_string(cache_path).unwrap();
+        let reparsed: TokenStream2 = rendered.parse().unwrap();
+        let rendered = reparsed.to_string();
+        assert!(rendered.contains("1"));
+        assert!(rendered.contains("2"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_disk_cache_reports_parse_errors() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        let path = cache_file_path(&dir, "formula", "bad");
+        fs::write(&path, "(").unwrap();
+
+        let rendered = fs::read_to_string(&path).unwrap();
+        let err = rendered.parse::<TokenStream2>().unwrap_err();
+        assert!(!err.to_string().is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cache_root_respects_env_configuration() {
+        std::env::set_var(DISABLE_CACHE_ENV, "1");
+        assert!(matches!(cache_root(), CacheMode::Disabled));
+        std::env::remove_var(DISABLE_CACHE_ENV);
+
+        let dir = temp_dir();
+        std::env::set_var(CACHE_DIR_ENV, &dir);
+        match cache_root() {
+            CacheMode::Disk(path) => assert_eq!(path, dir),
+            CacheMode::Disabled => panic!("cache should not be disabled"),
+        }
+        std::env::remove_var(CACHE_DIR_ENV);
+    }
+
+    #[test]
+    fn write_disk_cache_persists_rendered_tokens() {
+        let dir = temp_dir();
+        fs::create_dir_all(&dir).unwrap();
+        write_disk_cache(&dir, "formula", "hash", "3 + 4");
+        let rendered = fs::read_to_string(cache_file_path(&dir, "formula", "hash")).unwrap();
+        assert_eq!(rendered, "3 + 4");
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

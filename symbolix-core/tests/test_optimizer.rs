@@ -10,6 +10,7 @@ use symbolix_core::{
         variable::{Variable, VariableType},
     },
 };
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 fn numeric_var(name: &str) -> Variable {
     Variable {
@@ -154,4 +155,25 @@ fn normalize_and_factor_dispatch_over_semantic_expression() {
     normalize(&mut logical);
     factor(&mut logical);
     assert_eq!(logical.to_string(), "flag");
+}
+
+#[test]
+fn normalize_panics_on_empty_reducible_buckets_and_handles_invalid_relation_symbol() {
+    let mut add_zero_only = NumericExpression::Addition(symbolix_core::numeric_bucket![
+        NumericExpression::constant(Number::integer(0))
+    ]);
+    assert!(catch_unwind(AssertUnwindSafe(|| normalize_numeric(&mut add_zero_only))).is_err());
+
+    let mut or_false_only = LogicalExpression::Or(symbolix_core::logical_bucket![
+        LogicalExpression::constant(false)
+    ]);
+    assert!(catch_unwind(AssertUnwindSafe(|| normalize_logic(&mut or_false_only))).is_err());
+
+    let mut invalid_relation = LogicalExpression::Relation {
+        left: Box::new(NumericExpression::constant(Number::integer(1))),
+        operator: Symbol::Binary(symbolix_core::lexer::symbol::Binary::Add),
+        right: Box::new(NumericExpression::constant(Number::integer(2))),
+    };
+    normalize_logic(&mut invalid_relation);
+    assert_eq!(invalid_relation.to_string(), "false");
 }

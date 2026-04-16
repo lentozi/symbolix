@@ -556,3 +556,59 @@ fn dedup_solutions(solutions: Vec<NumericExpression>) -> Vec<NumericExpression> 
     }
     deduped
 }
+
+#[doc(hidden)]
+pub mod testing {
+    use super::*;
+
+    pub fn is_zero_public(expr: &NumericExpression) -> bool {
+        is_zero(expr)
+    }
+
+    pub fn contains_target_public(expr: &NumericExpression, target: &Variable) -> bool {
+        contains_target(expr, target)
+    }
+
+    pub fn collect_numeric_variables_public(expr: &NumericExpression) -> Vec<Variable> {
+        collect_numeric_variables(expr)
+    }
+
+    pub fn collect_logical_variables_public(expr: &LogicalExpression) -> Vec<Variable> {
+        let mut variables = Vec::new();
+        collect_logical_variables(expr, &mut variables);
+        variables
+    }
+
+    pub fn collect_domain_constraint_public(expr: &NumericExpression) -> LogicalExpression {
+        collect_domain_constraint(expr)
+    }
+
+    pub fn constraint_allows_identity_public(expr: &LogicalExpression) -> bool {
+        constraint_allows_identity(expr)
+    }
+
+    pub fn logical_is_not_false_public(expr: &LogicalExpression) -> bool {
+        logical_is_not_false(expr)
+    }
+
+    pub fn dedup_solutions_public(solutions: Vec<NumericExpression>) -> Vec<NumericExpression> {
+        dedup_solutions(solutions)
+    }
+
+    pub fn verify_solution_public(
+        target: &Variable,
+        expr: &NumericExpression,
+        constraint: &LogicalExpression,
+        solution: &NumericExpression,
+    ) -> bool {
+        verify_solution(target, expr, constraint, solution)
+    }
+
+    pub fn verify_branch_public(
+        target: &Variable,
+        expr: &NumericExpression,
+        branch: SolutionBranch,
+    ) -> Result<SolutionBranch, SolveError> {
+        verify_branch(target, expr, branch)
+    }
+}
