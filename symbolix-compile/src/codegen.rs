@@ -1,62 +1,12 @@
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
-use symbolix_core::equation::{BranchResult, SolutionBranch, SolutionSet};
-use symbolix_core::lexer::constant::Number;
+use symbolix_core::equation::{BranchResult, SolutionSet};
 use symbolix_core::lexer::symbol::{Relation, Symbol};
 use symbolix_core::semantic::semantic_ir::{
     logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
 };
 use symbolix_core::semantic::variable::{Variable, VariableType};
 use crate::CompileValue;
-
-fn runtime_core_path() -> TokenStream {
-    match crate_name("symbolix") {
-        Ok(FoundCrate::Itself) => quote! { crate::core },
-        Ok(FoundCrate::Name(name)) => {
-            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-            quote! { ::#ident::core }
-        }
-        Err(_) => match crate_name("symbolix-core") {
-            Ok(FoundCrate::Itself) => quote! { crate },
-            Ok(FoundCrate::Name(name)) => {
-                let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-                quote! { ::#ident }
-            }
-            Err(_) => quote! { ::symbolix::core },
-        },
-    }
-}
-
-fn runtime_equation_path() -> TokenStream {
-    let runtime = runtime_core_path();
-    quote! { #runtime::equation }
-}
-
-fn runtime_variable_path() -> TokenStream {
-    let runtime = runtime_core_path();
-    quote! { #runtime::semantic::variable }
-}
-
-fn runtime_number_path() -> TokenStream {
-    let runtime = runtime_core_path();
-    quote! { #runtime::lexer::constant::Number }
-}
-
-fn runtime_symbol_path() -> TokenStream {
-    let runtime = runtime_core_path();
-    quote! { #runtime::lexer::symbol }
-}
-
-fn runtime_numeric_expr_path() -> TokenStream {
-    let runtime = runtime_core_path();
-    quote! { #runtime::semantic::semantic_ir::numeric::NumericExpression }
-}
-
-fn runtime_logical_expr_path() -> TokenStream {
-    let runtime = runtime_core_path();
-    quote! { #runtime::semantic::semantic_ir::logic::LogicalExpression }
-}
 
 pub fn get_func_arguments(values: &[CompileValue]) -> (Vec<Ident>, Vec<TokenStream>) {
     let mut variables = Vec::new();
@@ -160,7 +110,6 @@ fn push_variable(variable: &Variable, variables: &mut Vec<Variable>) {
 }
 
 pub fn get_func_return_type(value: &CompileValue) -> TokenStream {
-    let equation = runtime_equation_path();
     match value {
         CompileValue::Semantic(expr) => {
             if expr.is_numeric() {
@@ -175,7 +124,7 @@ pub fn get_func_return_type(value: &CompileValue) -> TokenStream {
             VariableType::Boolean => quote! { bool },
             VariableType::Unknown => panic!("invalid variable type"),
         },
-        CompileValue::SolutionSet(_) => quote! { #equation::SolutionSet },
+        CompileValue::SolutionSet(solution_set) => solution_set_return_type(solution_set),
     }
 }
 
@@ -216,199 +165,89 @@ pub fn codegen_semantic(expr: &SemanticExpression) -> TokenStream {
 }
 
 fn codegen_solution_set(solution_set: &SolutionSet) -> TokenStream {
-    let equation = runtime_equation_path();
-    let target = codegen_variable_literal(&solution_set.target);
+    let shape = solution_set_shape(solution_set);
     let branches = solution_set
         .branches
         .iter()
-        .map(codegen_solution_branch)
+        .map(|branch| {
+            let constraint = codegen_logical(&branch.constraint);
+            let value = match (&shape, &branch.result) {
+                (SolutionSetShape::Scalar, BranchResult::Finite(solutions)) => {
+                    codegen_numeric(&solutions[0])
+                }
+                (SolutionSetShape::Vector, BranchResult::Finite(solutions)) => {
+                    let values = solutions.iter().map(codegen_numeric).collect::<Vec<_>>();
+                    quote! { vec![#(#values),*] }
+                }
+                (_, BranchResult::Identity) => unreachable!("identity branches are rejected earlier"),
+            };
+            (constraint, value)
+        })
         .collect::<Vec<_>>();
 
-    quote! {
-        #equation::SolutionSet {
-            target: #target,
-            branches: vec![#(#branches),*],
-        }
+    if branches.is_empty() {
+        return match shape {
+            SolutionSetShape::Scalar => {
+                quote! { panic!("solution set has no branches and cannot lower to a scalar") }
+            }
+            SolutionSetShape::Vector => quote! { Vec::<f64>::new() },
+        };
     }
-}
 
-fn codegen_solution_branch(branch: &SolutionBranch) -> TokenStream {
-    let equation = runtime_equation_path();
-    let constraint = codegen_logical_ast(&branch.constraint);
-    let result = match &branch.result {
-        BranchResult::Identity => {
-            quote! { #equation::BranchResult::Identity }
+    let else_block = match shape {
+        SolutionSetShape::Scalar => {
+            quote! { panic!("no condition in solution set matched for scalar result") }
         }
-        BranchResult::Finite(solutions) => {
-            let values = solutions.iter().map(codegen_numeric_ast).collect::<Vec<_>>();
-            quote! { #equation::BranchResult::Finite(vec![#(#values),*]) }
-        }
+        SolutionSetShape::Vector => quote! { Vec::<f64>::new() },
     };
 
-    quote! {
-        #equation::SolutionBranch {
-            constraint: #constraint,
-            result: #result,
-        }
-    }
-}
-
-fn codegen_variable_literal(variable: &Variable) -> TokenStream {
-    let variable_path = runtime_variable_path();
-    let name = &variable.name;
-    let var_type = match variable.var_type {
-        VariableType::Integer => quote! { #variable_path::VariableType::Integer },
-        VariableType::Float => quote! { #variable_path::VariableType::Float },
-        VariableType::Fraction => quote! { #variable_path::VariableType::Fraction },
-        VariableType::Boolean => quote! { #variable_path::VariableType::Boolean },
-        VariableType::Unknown => quote! { #variable_path::VariableType::Unknown },
-    };
-
-    quote! {
-        #variable_path::Variable {
-            name: #name.to_string(),
-            var_type: #var_type,
-            value: None,
-        }
-    }
-}
-
-fn codegen_number_literal(number: &Number) -> TokenStream {
-    let number_path = runtime_number_path();
-    match number {
-        Number::Integer(value) => quote! { #number_path::integer(#value) },
-        Number::Float(value) => {
-            let inner = value.0;
-            quote! { #number_path::float(#inner) }
-        }
-        Number::Fraction(frac) => {
-            let numerator = frac.numerator;
-            let denominator = frac.denominator;
-            quote! { #number_path::fraction(#numerator, #denominator) }
-        }
-    }
-}
-
-fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
-    let number_path = runtime_number_path();
-    let numeric_expr = runtime_numeric_expr_path();
-    match expr {
-        NumericExpression::Constant(number) => {
-            let number = codegen_number_literal(number);
-            quote! { #numeric_expr::constant(#number) }
-        }
-        NumericExpression::Variable(variable) => {
-            let variable = codegen_variable_literal(variable);
-            quote! { #numeric_expr::variable(#variable) }
-        }
-        NumericExpression::Negation(inner) => {
-            let inner = codegen_numeric_ast(inner);
-            quote! { -#inner }
-        }
-        NumericExpression::Addition(bucket) => {
-            let terms = bucket.iter().map(|expr| codegen_numeric_ast(&expr)).collect::<Vec<_>>();
-            quote! {
-                {
-                    let mut iter = vec![#(#terms),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| #numeric_expr::constant(#number_path::integer(0)));
-                    iter.fold(first, |acc, expr| acc + expr)
-                }
-            }
-        }
-        NumericExpression::Multiplication(bucket) => {
-            let factors = bucket.iter().map(|expr| codegen_numeric_ast(&expr)).collect::<Vec<_>>();
-            quote! {
-                {
-                    let mut iter = vec![#(#factors),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| #numeric_expr::constant(#number_path::integer(1)));
-                    iter.fold(first, |acc, expr| acc * expr)
-                }
-            }
-        }
-        NumericExpression::Power { base, exponent } => {
-            let base = codegen_numeric_ast(base);
-            let exponent = codegen_numeric_ast(exponent);
-            quote! {
-                #numeric_expr::power(&#base, &#exponent)
-            }
-        }
-        NumericExpression::Piecewise { cases, otherwise } => {
-            let cases = cases
-                .iter()
-                .map(|(condition, expr)| {
-                    let condition = codegen_logical_ast(condition);
-                    let expr = codegen_numeric_ast(expr);
-                    quote! { (#condition, #expr) }
-                })
-                .collect::<Vec<_>>();
-            let otherwise = if let Some(expr) = otherwise {
-                let expr = codegen_numeric_ast(expr);
-                quote! { Some(#expr) }
+    let mut stream = else_block;
+    for (constraint, value) in branches.into_iter().rev() {
+        stream = quote! {
+            if #constraint {
+                #value
             } else {
-                quote! { None }
-            };
+                #stream
+            }
+        };
+    }
 
-            quote! {
-                #numeric_expr::piecewise(
-                    vec![#(#cases),*],
-                    #otherwise,
-                )
+    stream
+}
+
+enum SolutionSetShape {
+    Scalar,
+    Vector,
+}
+
+fn solution_set_shape(solution_set: &SolutionSet) -> SolutionSetShape {
+    let mut saw_non_singleton = solution_set.branches.is_empty();
+    for branch in &solution_set.branches {
+        match &branch.result {
+            BranchResult::Finite(solutions) => {
+                if solutions.len() != 1 {
+                    saw_non_singleton = true;
+                }
+            }
+            BranchResult::Identity => {
+                panic!(
+                    "symbolix! cannot lower solution sets with identity branches to runtime values"
+                );
             }
         }
     }
+
+    if saw_non_singleton {
+        SolutionSetShape::Vector
+    } else {
+        SolutionSetShape::Scalar
+    }
 }
 
-fn codegen_logical_ast(expr: &LogicalExpression) -> TokenStream {
-    let logical_expr = runtime_logical_expr_path();
-    let symbol_path = runtime_symbol_path();
-    match expr {
-        LogicalExpression::Constant(value) => {
-            quote! { #logical_expr::constant(#value) }
-        }
-        LogicalExpression::Variable(variable) => {
-            let variable = codegen_variable_literal(variable);
-            quote! { #logical_expr::variable(#variable) }
-        }
-        LogicalExpression::Not(inner) => {
-            let inner = codegen_logical_ast(inner);
-            quote! { !#inner }
-        }
-        LogicalExpression::And(bucket) => {
-            let terms = bucket.iter().map(|expr| codegen_logical_ast(&expr)).collect::<Vec<_>>();
-            quote! {
-                {
-                    let mut iter = vec![#(#terms),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| #logical_expr::constant(true));
-                    iter.fold(first, |acc, expr| acc & expr)
-                }
-            }
-        }
-        LogicalExpression::Or(bucket) => {
-            let terms = bucket.iter().map(|expr| codegen_logical_ast(&expr)).collect::<Vec<_>>();
-            quote! {
-                {
-                    let mut iter = vec![#(#terms),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| #logical_expr::constant(false));
-                    iter.fold(first, |acc, expr| acc | expr)
-                }
-            }
-        }
-        LogicalExpression::Relation { left, operator, right } => {
-            let left = codegen_numeric_ast(left);
-            let right = codegen_numeric_ast(right);
-            let operator = match operator {
-                Symbol::Relation(Relation::Equal) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::Equal) },
-                Symbol::Relation(Relation::NotEqual) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::NotEqual) },
-                Symbol::Relation(Relation::LessThan) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::LessThan) },
-                Symbol::Relation(Relation::GreaterThan) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::GreaterThan) },
-                Symbol::Relation(Relation::LessEqual) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::LessEqual) },
-                Symbol::Relation(Relation::GreaterEqual) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::GreaterEqual) },
-                _ => unreachable!("solution constraints must be relation operators"),
-            };
-            quote! {
-                #logical_expr::relation(&#left, &#operator, &#right)
-            }
-        }
+fn solution_set_return_type(solution_set: &SolutionSet) -> TokenStream {
+    match solution_set_shape(solution_set) {
+        SolutionSetShape::Scalar => quote! { f64 },
+        SolutionSetShape::Vector => quote! { Vec<f64> },
     }
 }
 
@@ -591,7 +430,7 @@ pub fn generate_struct(
     );
 
     quote! {
-        {
+        (|| {
             #[derive(Clone, Copy)]
             #[doc = #doc_comment]
             struct CompiledFormula;
@@ -610,7 +449,7 @@ pub fn generate_struct(
             }
 
             CompiledFormula
-        }
+        })()
     }.into()
 }
 

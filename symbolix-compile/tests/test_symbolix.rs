@@ -12,8 +12,7 @@ fn solve_accepts_explicit_target_variable() {
     };
 
     let result = compiled.calculate(4.0);
-    let rendered = format!("{}", result);
-    assert!(rendered.contains("a"));
+    assert_eq!(result, -4.0);
 }
 
 #[test]
@@ -78,9 +77,21 @@ fn solution_set_does_not_duplicate_branch_constraints() {
         solve!(equation, y)
     };
 
-    let rendered = format!("{}", compiled.calculate(true));
+    assert_eq!(compiled.calculate(true), 20.0);
+    assert_eq!(compiled.calculate(false), 0.0);
+}
 
-    assert!(rendered.contains("when cond"));
-    assert!(!rendered.contains("cond AND cond"));
-    assert!(!rendered.contains("NOT (cond) AND NOT (cond)"));
+#[test]
+fn solve_returns_vector_for_multiple_roots() {
+    let compiled = symbolix! {
+        let x = var!("x", f64);
+        let lhs = expr!("x ^ 2 - 1");
+        let rhs = expr!("0");
+        let equation = lhs.equal_to(rhs);
+        solve!(equation, x)
+    };
+
+    let mut result = compiled.calculate();
+    result.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    assert_eq!(result, vec![-1.0, 1.0]);
 }
