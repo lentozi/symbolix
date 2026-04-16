@@ -1,4 +1,5 @@
 use proc_macro2::{Ident, TokenStream};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use symbolix_core::equation::{BranchResult, SolutionBranch, SolutionSet};
 use symbolix_core::lexer::constant::Number;
@@ -8,6 +9,54 @@ use symbolix_core::semantic::semantic_ir::{
 };
 use symbolix_core::semantic::variable::{Variable, VariableType};
 use crate::CompileValue;
+
+fn runtime_core_path() -> TokenStream {
+    match crate_name("symbolix") {
+        Ok(FoundCrate::Itself) => quote! { crate::core },
+        Ok(FoundCrate::Name(name)) => {
+            let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+            quote! { ::#ident::core }
+        }
+        Err(_) => match crate_name("symbolix-core") {
+            Ok(FoundCrate::Itself) => quote! { crate },
+            Ok(FoundCrate::Name(name)) => {
+                let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                quote! { ::#ident }
+            }
+            Err(_) => quote! { ::symbolix::core },
+        },
+    }
+}
+
+fn runtime_equation_path() -> TokenStream {
+    let runtime = runtime_core_path();
+    quote! { #runtime::equation }
+}
+
+fn runtime_variable_path() -> TokenStream {
+    let runtime = runtime_core_path();
+    quote! { #runtime::semantic::variable }
+}
+
+fn runtime_number_path() -> TokenStream {
+    let runtime = runtime_core_path();
+    quote! { #runtime::lexer::constant::Number }
+}
+
+fn runtime_symbol_path() -> TokenStream {
+    let runtime = runtime_core_path();
+    quote! { #runtime::lexer::symbol }
+}
+
+fn runtime_numeric_expr_path() -> TokenStream {
+    let runtime = runtime_core_path();
+    quote! { #runtime::semantic::semantic_ir::numeric::NumericExpression }
+}
+
+fn runtime_logical_expr_path() -> TokenStream {
+    let runtime = runtime_core_path();
+    quote! { #runtime::semantic::semantic_ir::logic::LogicalExpression }
+}
 
 pub fn get_func_arguments(values: &[CompileValue]) -> (Vec<Ident>, Vec<TokenStream>) {
     let mut variables = Vec::new();
@@ -110,6 +159,7 @@ fn push_variable(variable: &Variable, variables: &mut Vec<Variable>) {
 }
 
 pub fn get_func_return_type(value: &CompileValue) -> TokenStream {
+    let equation = runtime_equation_path();
     match value {
         CompileValue::Semantic(expr) => {
             if expr.is_numeric() {
@@ -118,7 +168,7 @@ pub fn get_func_return_type(value: &CompileValue) -> TokenStream {
                 quote! { bool }
             }
         }
-        CompileValue::SolutionSet(_) => quote! { symbolix_core::equation::SolutionSet },
+        CompileValue::SolutionSet(_) => quote! { #equation::SolutionSet },
     }
 }
 
@@ -158,6 +208,7 @@ pub fn codegen_semantic(expr: &SemanticExpression) -> TokenStream {
 }
 
 fn codegen_solution_set(solution_set: &SolutionSet) -> TokenStream {
+    let equation = runtime_equation_path();
     let target = codegen_variable_literal(&solution_set.target);
     let branches = solution_set
         .branches
@@ -166,7 +217,7 @@ fn codegen_solution_set(solution_set: &SolutionSet) -> TokenStream {
         .collect::<Vec<_>>();
 
     quote! {
-        symbolix_core::equation::SolutionSet {
+        #equation::SolutionSet {
             target: #target,
             branches: vec![#(#branches),*],
         }
@@ -174,19 +225,20 @@ fn codegen_solution_set(solution_set: &SolutionSet) -> TokenStream {
 }
 
 fn codegen_solution_branch(branch: &SolutionBranch) -> TokenStream {
+    let equation = runtime_equation_path();
     let constraint = codegen_logical_ast(&branch.constraint);
     let result = match &branch.result {
         BranchResult::Identity => {
-            quote! { symbolix_core::equation::BranchResult::Identity }
+            quote! { #equation::BranchResult::Identity }
         }
         BranchResult::Finite(solutions) => {
             let values = solutions.iter().map(codegen_numeric_ast).collect::<Vec<_>>();
-            quote! { symbolix_core::equation::BranchResult::Finite(vec![#(#values),*]) }
+            quote! { #equation::BranchResult::Finite(vec![#(#values),*]) }
         }
     };
 
     quote! {
-        symbolix_core::equation::SolutionBranch {
+        #equation::SolutionBranch {
             constraint: #constraint,
             result: #result,
         }
@@ -194,17 +246,18 @@ fn codegen_solution_branch(branch: &SolutionBranch) -> TokenStream {
 }
 
 fn codegen_variable_literal(variable: &Variable) -> TokenStream {
+    let variable_path = runtime_variable_path();
     let name = &variable.name;
     let var_type = match variable.var_type {
-        VariableType::Integer => quote! { symbolix_core::semantic::variable::VariableType::Integer },
-        VariableType::Float => quote! { symbolix_core::semantic::variable::VariableType::Float },
-        VariableType::Fraction => quote! { symbolix_core::semantic::variable::VariableType::Fraction },
-        VariableType::Boolean => quote! { symbolix_core::semantic::variable::VariableType::Boolean },
-        VariableType::Unknown => quote! { symbolix_core::semantic::variable::VariableType::Unknown },
+        VariableType::Integer => quote! { #variable_path::VariableType::Integer },
+        VariableType::Float => quote! { #variable_path::VariableType::Float },
+        VariableType::Fraction => quote! { #variable_path::VariableType::Fraction },
+        VariableType::Boolean => quote! { #variable_path::VariableType::Boolean },
+        VariableType::Unknown => quote! { #variable_path::VariableType::Unknown },
     };
 
     quote! {
-        symbolix_core::semantic::variable::Variable {
+        #variable_path::Variable {
             name: #name.to_string(),
             var_type: #var_type,
             value: None,
@@ -213,29 +266,32 @@ fn codegen_variable_literal(variable: &Variable) -> TokenStream {
 }
 
 fn codegen_number_literal(number: &Number) -> TokenStream {
+    let number_path = runtime_number_path();
     match number {
-        Number::Integer(value) => quote! { symbolix_core::lexer::constant::Number::integer(#value) },
+        Number::Integer(value) => quote! { #number_path::integer(#value) },
         Number::Float(value) => {
             let inner = value.0;
-            quote! { symbolix_core::lexer::constant::Number::float(#inner) }
+            quote! { #number_path::float(#inner) }
         }
         Number::Fraction(frac) => {
             let numerator = frac.numerator;
             let denominator = frac.denominator;
-            quote! { symbolix_core::lexer::constant::Number::fraction(#numerator, #denominator) }
+            quote! { #number_path::fraction(#numerator, #denominator) }
         }
     }
 }
 
 fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
+    let number_path = runtime_number_path();
+    let numeric_expr = runtime_numeric_expr_path();
     match expr {
         NumericExpression::Constant(number) => {
             let number = codegen_number_literal(number);
-            quote! { symbolix_core::semantic::semantic_ir::numeric::NumericExpression::constant(#number) }
+            quote! { #numeric_expr::constant(#number) }
         }
         NumericExpression::Variable(variable) => {
             let variable = codegen_variable_literal(variable);
-            quote! { symbolix_core::semantic::semantic_ir::numeric::NumericExpression::variable(#variable) }
+            quote! { #numeric_expr::variable(#variable) }
         }
         NumericExpression::Negation(inner) => {
             let inner = codegen_numeric_ast(inner);
@@ -246,7 +302,7 @@ fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
             quote! {
                 {
                     let mut iter = vec![#(#terms),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| symbolix_core::semantic::semantic_ir::numeric::NumericExpression::constant(symbolix_core::lexer::constant::Number::integer(0)));
+                    let first = iter.next().unwrap_or_else(|| #numeric_expr::constant(#number_path::integer(0)));
                     iter.fold(first, |acc, expr| acc + expr)
                 }
             }
@@ -256,7 +312,7 @@ fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
             quote! {
                 {
                     let mut iter = vec![#(#factors),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| symbolix_core::semantic::semantic_ir::numeric::NumericExpression::constant(symbolix_core::lexer::constant::Number::integer(1)));
+                    let first = iter.next().unwrap_or_else(|| #numeric_expr::constant(#number_path::integer(1)));
                     iter.fold(first, |acc, expr| acc * expr)
                 }
             }
@@ -265,7 +321,7 @@ fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
             let base = codegen_numeric_ast(base);
             let exponent = codegen_numeric_ast(exponent);
             quote! {
-                symbolix_core::semantic::semantic_ir::numeric::NumericExpression::power(&#base, &#exponent)
+                #numeric_expr::power(&#base, &#exponent)
             }
         }
         NumericExpression::Piecewise { cases, otherwise } => {
@@ -285,7 +341,7 @@ fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
             };
 
             quote! {
-                symbolix_core::semantic::semantic_ir::numeric::NumericExpression::piecewise(
+                #numeric_expr::piecewise(
                     vec![#(#cases),*],
                     #otherwise,
                 )
@@ -295,13 +351,15 @@ fn codegen_numeric_ast(expr: &NumericExpression) -> TokenStream {
 }
 
 fn codegen_logical_ast(expr: &LogicalExpression) -> TokenStream {
+    let logical_expr = runtime_logical_expr_path();
+    let symbol_path = runtime_symbol_path();
     match expr {
         LogicalExpression::Constant(value) => {
-            quote! { symbolix_core::semantic::semantic_ir::logic::LogicalExpression::constant(#value) }
+            quote! { #logical_expr::constant(#value) }
         }
         LogicalExpression::Variable(variable) => {
             let variable = codegen_variable_literal(variable);
-            quote! { symbolix_core::semantic::semantic_ir::logic::LogicalExpression::variable(#variable) }
+            quote! { #logical_expr::variable(#variable) }
         }
         LogicalExpression::Not(inner) => {
             let inner = codegen_logical_ast(inner);
@@ -312,7 +370,7 @@ fn codegen_logical_ast(expr: &LogicalExpression) -> TokenStream {
             quote! {
                 {
                     let mut iter = vec![#(#terms),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| symbolix_core::semantic::semantic_ir::logic::LogicalExpression::constant(true));
+                    let first = iter.next().unwrap_or_else(|| #logical_expr::constant(true));
                     iter.fold(first, |acc, expr| acc & expr)
                 }
             }
@@ -322,7 +380,7 @@ fn codegen_logical_ast(expr: &LogicalExpression) -> TokenStream {
             quote! {
                 {
                     let mut iter = vec![#(#terms),*].into_iter();
-                    let first = iter.next().unwrap_or_else(|| symbolix_core::semantic::semantic_ir::logic::LogicalExpression::constant(false));
+                    let first = iter.next().unwrap_or_else(|| #logical_expr::constant(false));
                     iter.fold(first, |acc, expr| acc | expr)
                 }
             }
@@ -331,16 +389,16 @@ fn codegen_logical_ast(expr: &LogicalExpression) -> TokenStream {
             let left = codegen_numeric_ast(left);
             let right = codegen_numeric_ast(right);
             let operator = match operator {
-                Symbol::Relation(Relation::Equal) => quote! { symbolix_core::lexer::symbol::Symbol::Relation(symbolix_core::lexer::symbol::Relation::Equal) },
-                Symbol::Relation(Relation::NotEqual) => quote! { symbolix_core::lexer::symbol::Symbol::Relation(symbolix_core::lexer::symbol::Relation::NotEqual) },
-                Symbol::Relation(Relation::LessThan) => quote! { symbolix_core::lexer::symbol::Symbol::Relation(symbolix_core::lexer::symbol::Relation::LessThan) },
-                Symbol::Relation(Relation::GreaterThan) => quote! { symbolix_core::lexer::symbol::Symbol::Relation(symbolix_core::lexer::symbol::Relation::GreaterThan) },
-                Symbol::Relation(Relation::LessEqual) => quote! { symbolix_core::lexer::symbol::Symbol::Relation(symbolix_core::lexer::symbol::Relation::LessEqual) },
-                Symbol::Relation(Relation::GreaterEqual) => quote! { symbolix_core::lexer::symbol::Symbol::Relation(symbolix_core::lexer::symbol::Relation::GreaterEqual) },
+                Symbol::Relation(Relation::Equal) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::Equal) },
+                Symbol::Relation(Relation::NotEqual) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::NotEqual) },
+                Symbol::Relation(Relation::LessThan) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::LessThan) },
+                Symbol::Relation(Relation::GreaterThan) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::GreaterThan) },
+                Symbol::Relation(Relation::LessEqual) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::LessEqual) },
+                Symbol::Relation(Relation::GreaterEqual) => quote! { #symbol_path::Symbol::Relation(#symbol_path::Relation::GreaterEqual) },
                 _ => unreachable!("solution constraints must be relation operators"),
             };
             quote! {
-                symbolix_core::semantic::semantic_ir::logic::LogicalExpression::relation(&#left, &#operator, &#right)
+                #logical_expr::relation(&#left, &#operator, &#right)
             }
         }
     }
@@ -640,3 +698,4 @@ fn solution_set_arguments_do_not_include_target_variable() {
     let names = names.into_iter().map(|ident| ident.to_string()).collect::<Vec<_>>();
     assert_eq!(names, vec!["a".to_string()]);
 }
+
