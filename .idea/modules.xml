@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/symbolix.iml" filepath="$PROJECT_DIR$/.idea/symbolix.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/exprion.iml" filepath="$PROJECT_DIR$/.idea/exprion.iml" />
     </modules>
   </component>
 </project>

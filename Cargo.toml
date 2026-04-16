@@ -1,12 +1,13 @@
 [workspace]
-members = ["symbolix-core", "symbolix-compile"]
+members = ["exprion-core", "exprion-compile", "exprion-engine"]
 
 [package]
-name = "symbolix"
+name = "exprion"
 version = "0.1.0"
 edition = "2021"
 license-file = "LICENSE"
 
 [dependencies]
-symbolix-core = { path = "./symbolix-core" }
-symbolix-compile = { path = "./symbolix-compile" }
+exprion-core = { path = "./exprion-core" }
+exprion-compile = { path = "./exprion-compile" }
+exprion-engine = { path = "./exprion-engine" }

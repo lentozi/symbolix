@@ -1,0 +1,9 @@
+[package]
+name = "exprion-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nom = "8.0.0"
+log = "0.4.29"
+ordered-float = "5.1.0"

@@ -1,0 +1,17 @@
+[package]
+name = "exprion-compile"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+proc-macro-crate = "3.2"
+exprion-core = { path = "../exprion-core" }
+
+[dev-dependencies]
+trybuild = "1.0"

@@ -1,13 +1,14 @@
-# symbolix
+# exprion
 
-`symbolix` 是一个用 Rust 编写的表达式工具链 workspace，围绕“表达式字符串 -> 词法分析 -> 语法分析 -> 语义 IR -> 优化 -> 求值 / 代码生成”这条链路组织。当前仓库包含核心分析库 `symbolix-core` 和编译期宏 crate `symbolix-compile`。
+`exprion` 是一个用 Rust 编写的表达式工具链 workspace，围绕“表达式字符串 -> 词法分析 -> 语法分析 -> 语义 IR -> 优化 -> 运行时编译 / 代码生成”这条链路组织。当前仓库包含表达式前端 `exprion-core`、运行时 JIT crate `exprion-engine`，以及已有的编译期宏 crate `exprion-compile`。
 
 它适合用于：
 
 - 构建自定义表达式语言
 - 在 Rust 项目中嵌入公式计算能力
 - 研究 Pratt parser、语义分析和简单代数化简
-- 在编译期把表达式编译为可直接调用的 Rust 代码
+- 在运行时把表达式 JIT 编译为可执行代码
+- 在 Rust 项目中保留编译期宏展开这条现有能力
 
 ## 当前能力
 
@@ -16,18 +17,25 @@
 - 语义分析：将 AST 转换为数值 / 逻辑语义 IR
 - 优化：包含常量折叠、扁平化、规范化等优化步骤
 - 方程能力：支持单变量一次方程求解
+- 运行时 JIT：
+  - 当前提供 `exprion-engine::jit_compile_numeric(...)`
+  - 当前通过 LLVM C API 生成并执行本机代码
+  - 当前支持基础算术表达式，暂不支持幂、分段表达式和布尔运算的机器码生成
 - 编译期代码生成：
   - `formula!`：从表达式字符串生成可调用对象
-  - `symbolix!`：从块状 DSL 生成可调用对象
+  - `exprion!`：从块状 DSL 生成可调用对象
 
 ## Workspace 结构
 
-- `symbolix-core/`
+- `exprion-core/`
   - 表达式核心库
   - 包含 `lexer`、`parser`、`semantic`、`optimizer`、`equation`、`context` 等模块
-- `symbolix-compile/`
+- `exprion-compile/`
   - `proc-macro` crate
-  - 提供 `formula!` 和 `symbolix!`
+  - 提供 `formula!` 和 `exprion!`
+- `exprion-engine/`
+  - 运行时 JIT crate
+  - 当前将 `exprion-core` 产出的数值语义 IR 降到 LLVM IR，再交给 LLVM MCJIT 执行
 - `examples/`
   - 顶层示例，演示如何直接使用编译期宏
 - `src/lib.rs`
@@ -65,22 +73,75 @@ cargo test --workspace
 运行示例：
 
 ```bash
-cargo run -p symbolix-core --example compile
-cargo run -p symbolix-core --example equation
-cargo run -p symbolix-core --example error
+cargo run -p exprion-core --example pipeline
+cargo run -p exprion-core --example equation
+cargo run -p exprion-core --example error
 
-cargo run -p symbolix-compile --example main
-cargo run -p symbolix-compile --example rust_analyse
+cargo run -p exprion-compile --example formula
+cargo run -p exprion-compile --example rust_analyse
+cargo run -p exprion-engine --example basic
+
+cargo test -p exprion-engine
 
 cargo run --example workspace_demo
 ```
 
-## 使用 `symbolix-core`
+## JIT 方向
+
+当前推荐把 `exprion-core` 理解为前端和优化层，把 `exprion-engine` 理解为运行时后端：
+
+- `exprion-core` 负责 lexer、parser、语义分析和优化
+- `exprion-engine` 负责把优化后的语义 IR 降到 LLVM IR 并执行
+- `exprion-compile` 继续保留为编译期宏能力，但它不是 JIT
+
+`exprion-engine` 当前推荐的最小用法：
+
+```rust
+use exprion_core::{
+    lexer::Lexer,
+    new_compile_context,
+    optimizer::optimize,
+    parser::Parser,
+    semantic::Analyzer,
+};
+use exprion_engine::jit_compile_numeric;
+
+fn main() {
+    let semantic = new_compile_context! {
+        let mut lexer = Lexer::new("z + x * 2 + 1");
+        let parsed = Parser::pratt(&mut lexer);
+        let mut analyzer = Analyzer::new();
+        let mut semantic = analyzer.analyze_with_ctx(&parsed);
+        optimize(&mut semantic);
+        semantic
+    };
+    let compiled = jit_compile_numeric(semantic).unwrap();
+
+    // 变量顺序按名字排序，这里是 (x, z)
+    let result = compiled.calculate(&[3.0, 10.0]).unwrap();
+    assert_eq!(compiled.variables(), &["x".to_string(), "z".to_string()]);
+    assert!((result - 17.0).abs() < 1e-9);
+}
+```
+
+其中：
+
+- `jit_compile_numeric(...)` 负责把 `SemanticExpression` 编译为运行时可调用对象
+- 字符串到 `SemanticExpression` 的前端转换由 `exprion-core` 负责，JIT 不再直接接收 `&str`
+
+当前限制：
+
+- 仅支持数值表达式的 JIT
+- 仅支持 `f64` 调用接口
+- 依赖本机可用的 LLVM 安装和 `llvm-config`
+- 当前支持基础算术表达式，尚未支持 `pow`、分段表达式和布尔运算的机器码生成
+
+## 使用 `exprion-core`
 
 下面的示例展示了从字符串表达式到语义 IR 的基本流程：
 
 ```rust
-use symbolix_core::{
+use exprion_core::{
     lexer::Lexer,
     new_compile_context,
     optimizer::optimize,
@@ -110,10 +171,10 @@ fn main() {
 
 ## 求解单变量一次方程
 
-`symbolix-core` 当前提供单变量一次方程求解能力：
+`exprion-core` 当前提供单变量一次方程求解能力：
 
 ```rust
-use symbolix_core::{
+use exprion_core::{
     equation::Equation,
     lexer::Lexer,
     new_compile_context,
@@ -153,7 +214,7 @@ fn main() {
 示例：
 
 ```rust
-use symbolix_compile::formula;
+use exprion_compile::formula;
 
 fn main() {
     let formula = formula!("y + x * 2");
@@ -172,17 +233,17 @@ fn main() {
 - 数值表达式返回 `f64`
 - 逻辑表达式返回 `bool`
 
-## 使用 `symbolix!`
+## 使用 `exprion!`
 
-`symbolix!` 提供了一个更接近 Rust 代码风格的块状 DSL，适合把多个中间表达式组合起来并在最后返回一个表达式或元组。
+`exprion!` 提供了一个更接近 Rust 代码风格的块状 DSL，适合把多个中间表达式组合起来并在最后返回一个表达式或元组。
 
 示例：
 
 ```rust
-use symbolix_compile::symbolix;
+use exprion_compile::exprion;
 
 fn main() {
-    let code = symbolix! {
+    let code = exprion! {
         let x = var!("x", f64);
         let z = var!("z", f64);
 
@@ -210,24 +271,25 @@ fn main() {
 
 ## 已有示例文件
 
-- `symbolix-core/examples/compile.rs`
+- `exprion-core/examples/pipeline.rs`
   - 演示手动执行 lexer、parser、semantic、optimizer 流程
-- `symbolix-core/examples/equation.rs`
+- `exprion-core/examples/equation.rs`
   - 演示方程求解
-- `symbolix-core/examples/error.rs`
+- `exprion-core/examples/error.rs`
   - 演示错误输入的处理方式
-- `symbolix-compile/examples/main.rs`
+- `exprion-compile/examples/formula.rs`
   - 演示 `formula!`
-- `symbolix-compile/examples/rust_analyse.rs`
-  - 演示 `symbolix!`
+- `exprion-compile/examples/rust_analyse.rs`
+  - 演示 `exprion!`
 - `examples/workspace_demo.rs`
   - 顶层入口示例
 
 ## 开发建议
 
-- 若要扩展表达式语法，优先查看 `symbolix-core/src/lexer` 和 `symbolix-core/src/parser`
-- 若要扩展语义能力或优化规则，优先查看 `symbolix-core/src/semantic` 和 `symbolix-core/src/optimizer`
-- 若要扩展编译期宏行为，重点查看 `symbolix-compile/src/lib.rs`、`symbolix-compile/src/codegen.rs` 和 `symbolix-compile/src/rust_expr.rs`
+- 若要扩展表达式语法，优先查看 `exprion-core/src/lexer` 和 `exprion-core/src/parser`
+- 若要扩展语义能力或优化规则，优先查看 `exprion-core/src/semantic` 和 `exprion-core/src/optimizer`
+- 若要扩展 JIT 后端，优先查看 `exprion-engine/src/lib.rs` 和 `exprion-engine/src/llvm_backend.rs`
+- 若要扩展编译期宏行为，重点查看 `exprion-compile/src/lib.rs`、`exprion-compile/src/codegen.rs` 和 `exprion-compile/src/rust_expr.rs`
 - 修改后建议至少运行一次 `cargo test --workspace`
 
 ## 许可证

@@ -15,6 +15,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "exprion"
+version = "0.1.0"
+dependencies = [
+ "exprion-compile",
+ "exprion-core",
+ "exprion-engine",
+]
+
+[[package]]
+name = "exprion-compile"
+version = "0.1.0"
+dependencies = [
+ "exprion-core",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "trybuild",
+]
+
+[[package]]
+name = "exprion-core"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "nom",
+ "ordered-float",
+]
+
+[[package]]
+name = "exprion-engine"
+version = "0.1.0"
+dependencies = [
+ "exprion-core",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -157,35 +194,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
-]
-
-[[package]]
-name = "symbolix"
-version = "0.1.0"
-dependencies = [
- "symbolix-compile",
- "symbolix-core",
-]
-
-[[package]]
-name = "symbolix-compile"
-version = "0.1.0"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "symbolix-core",
- "syn",
- "trybuild",
-]
-
-[[package]]
-name = "symbolix-core"
-version = "0.1.0"
-dependencies = [
- "log",
- "nom",
- "ordered-float",
 ]
 
 [[package]]

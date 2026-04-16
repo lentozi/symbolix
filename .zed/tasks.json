@@ -13,8 +13,8 @@
     "show_command": false,
   },
   {
-    "label": "run example main for symbolix-core",
-    "command": "cargo run --example main --package symbolix-core",
+    "label": "run example main for exprion-core",
+    "command": "cargo run --example main --package exprion-core",
     "use_new_terminal": false,
     "allow_concurrent_runs": false,
     "reveal": "always",
