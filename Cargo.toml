@@ -1,5 +1,5 @@
 [workspace]
-members = ["exprion-core", "exprion-compile", "exprion-engine"]
+members = ["exprion-core", "exprion-compile", "exprion-engine", "exprion-api"]
 
 [package]
 name = "exprion"

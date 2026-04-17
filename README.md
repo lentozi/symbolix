@@ -1,6 +1,6 @@
 # exprion
 
-`exprion` 是一个用 Rust 编写的表达式工具链 workspace，围绕“表达式字符串 -> 词法分析 -> 语法分析 -> 语义 IR -> 优化 -> 运行时编译 / 代码生成”这条链路组织。当前仓库包含表达式前端 `exprion-core`、运行时 JIT crate `exprion-engine`，以及已有的编译期宏 crate `exprion-compile`。
+`exprion` 是一个用 Rust 编写的表达式工具链 workspace，围绕“表达式字符串 -> 词法分析 -> 语法分析 -> 语义 IR -> 优化 -> 运行时编译 / 代码生成”这条链路组织。当前仓库包含表达式前端 `exprion-core`、面向使用者的组合 API crate `exprion-api`、运行时 JIT crate `exprion-engine`，以及已有的编译期宏 crate `exprion-compile`。
 
 它适合用于：
 
@@ -30,6 +30,9 @@
 - `exprion-core/`
   - 表达式核心库
   - 包含 `lexer`、`parser`、`semantic`、`optimizer`、`equation`、`context` 等模块
+- `exprion-api/`
+  - 面向使用者的组合 API
+  - 统一表达式、变量、常量之间的组合方式
 - `exprion-compile/`
   - `proc-macro` crate
   - 提供 `formula!` 和 `exprion!`
@@ -82,6 +85,7 @@ cargo run -p exprion-compile --example formula
 cargo run -p exprion-compile --example rust_analyse
 cargo run -p exprion-engine --example basic
 
+cargo test -p exprion-api
 cargo test -p exprion-engine
 
 cargo run --example workspace_demo
@@ -120,7 +124,7 @@ fn main() {
 
     // 变量顺序按名字排序，这里是 (x, z)
     let result = compiled.calculate(&[3.0, 10.0]).unwrap();
-    assert_eq!(compiled.variables(), &["x".to_string(), "z".to_string()]);
+    assert_eq!(compiled.variables(), vec!["x".to_string(), "z".to_string()]);
     assert!((result - 17.0).abs() < 1e-9);
 }
 ```
@@ -138,6 +142,24 @@ fn main() {
 - 当前不支持布尔变量参数的 JIT；逻辑表达式目前支持基于数值关系的逻辑组合
 
 ## 使用 `exprion-core`
+
+## 使用 `exprion-api`
+
+`exprion-api` 适合把表达式、变量和常量之间的组合规则包装成更直接的开发接口，而不是让使用者直接操作 `lexer / parser / semantic` 这些底层模块。
+
+```rust
+use exprion_api::{scope, Var};
+
+fn main() {
+    scope(|| {
+        let x = Var::number("x");
+        let y = Var::number("y");
+
+        let expr = (x.clone() + y.clone() * 2.0).gt(10.0);
+        println!("{}", expr.semantic());
+    });
+}
+```
 
 下面的示例展示了从字符串表达式到语义 IR 的基本流程：
 

@@ -49,6 +49,7 @@ fn cargo_check_stderr(temp_dir: &PathBuf) -> String {
     let output = Command::new("cargo")
         .arg("check")
         .current_dir(&crate_dir)
+        .env("CARGO_NET_OFFLINE", "true")
         .output()
         .expect("failed to run cargo check");
 
