@@ -18,9 +18,9 @@
 - 优化：包含常量折叠、扁平化、规范化等优化步骤
 - 方程能力：支持单变量一次方程求解
 - 运行时 JIT：
-  - 当前提供 `exprion-engine::jit_compile_numeric(...)`
+  - 当前提供 `exprion-engine::jit_compile_numeric(...)` 和 `exprion-engine::jit_compile_logical(...)`
   - 当前通过 LLVM C API 生成并执行本机代码
-  - 当前支持基础算术表达式，暂不支持幂、分段表达式和布尔运算的机器码生成
+  - 当前已支持基础算术、`pow`、关系逻辑和数值 `piecewise` 的机器码生成
 - 编译期代码生成：
   - `formula!`：从表达式字符串生成可调用对象
   - `exprion!`：从块状 DSL 生成可调用对象
@@ -36,6 +36,7 @@
 - `exprion-engine/`
   - 运行时 JIT crate
   - 当前将 `exprion-core` 产出的数值语义 IR 降到 LLVM IR，再交给 LLVM MCJIT 执行
+  - 内部已拆分为 `lowering` 和 `backend` 两层，`backend` 目前通过 trait 接 MCJIT，方便后续切换到 ORC JIT
 - `examples/`
   - 顶层示例，演示如何直接使用编译期宏
 - `src/lib.rs`
@@ -126,7 +127,7 @@ fn main() {
 
 其中：
 
-- `jit_compile_numeric(...)` 负责把 `SemanticExpression` 编译为运行时可调用对象
+- `jit_compile_numeric(...)` 和 `jit_compile_logical(...)` 负责把 `SemanticExpression` 编译为运行时可调用对象
 - 字符串到 `SemanticExpression` 的前端转换由 `exprion-core` 负责，JIT 不再直接接收 `&str`
 
 当前限制：
@@ -134,7 +135,7 @@ fn main() {
 - 仅支持数值表达式的 JIT
 - 仅支持 `f64` 调用接口
 - 依赖本机可用的 LLVM 安装和 `llvm-config`
-- 当前支持基础算术表达式，尚未支持 `pow`、分段表达式和布尔运算的机器码生成
+- 当前不支持布尔变量参数的 JIT；逻辑表达式目前支持基于数值关系的逻辑组合
 
 ## 使用 `exprion-core`
 
@@ -288,7 +289,7 @@ fn main() {
 
 - 若要扩展表达式语法，优先查看 `exprion-core/src/lexer` 和 `exprion-core/src/parser`
 - 若要扩展语义能力或优化规则，优先查看 `exprion-core/src/semantic` 和 `exprion-core/src/optimizer`
-- 若要扩展 JIT 后端，优先查看 `exprion-engine/src/lib.rs` 和 `exprion-engine/src/llvm_backend.rs`
+- 若要扩展 JIT 后端，优先查看 `exprion-engine/src/lib.rs`、`exprion-engine/src/lowering.rs` 和 `exprion-engine/src/backend/mcjit.rs`
 - 若要扩展编译期宏行为，重点查看 `exprion-compile/src/lib.rs`、`exprion-compile/src/codegen.rs` 和 `exprion-compile/src/rust_expr.rs`
 - 修改后建议至少运行一次 `cargo test --workspace`
 

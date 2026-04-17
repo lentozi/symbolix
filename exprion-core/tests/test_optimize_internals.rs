@@ -112,10 +112,25 @@ fn optimize_numeric_d1_merges_like_terms_and_piecewise_values() {
 fn optimize_logic_d1_handles_contradictions_and_nested_relations() {
     let flag = LogicalExpression::variable(bool_var("flag"));
     let contradiction = optimize_logic_d1(flag.clone() & !flag.clone());
-    assert_eq!(contradiction.to_string(), "()");
+    assert_eq!(contradiction.to_string(), "false");
 
     let tautology = optimize_logic_d1(flag.clone() | !flag.clone());
-    assert_eq!(tautology.to_string(), "()");
+    assert_eq!(tautology.to_string(), "true");
+
+    let x_rel = LogicalExpression::relation(
+        &NumericExpression::variable(numeric_var("x")),
+        &Symbol::Relation(Relation::GreaterThan),
+        &NumericExpression::constant(Number::integer(0)),
+    );
+    let y_rel = LogicalExpression::relation(
+        &NumericExpression::variable(numeric_var("y")),
+        &Symbol::Relation(Relation::LessThan),
+        &NumericExpression::constant(Number::integer(10)),
+    );
+    let preserved = optimize_logic_d1(x_rel.clone() & y_rel.clone());
+    let rendered_preserved = preserved.to_string();
+    assert!(rendered_preserved.contains("x"));
+    assert!(rendered_preserved.contains("y"));
 
     let x = NumericExpression::variable(numeric_var("x"));
     let relation = LogicalExpression::relation(
@@ -141,5 +156,5 @@ fn optimize_d1_dispatches_for_semantic_expression() {
         LogicalExpression::variable(bool_var("flag")) | !LogicalExpression::variable(bool_var("flag")),
     );
     optimize_d1(&mut logical);
-    assert_eq!(logical.to_string(), "()");
+    assert_eq!(logical.to_string(), "true");
 }

@@ -145,6 +145,8 @@ pub fn optimize_logic_d1(expr: LogicalExpression) -> LogicalExpression {
                     } else {
                         return LogicalExpression::Constant(false);
                     }
+                } else {
+                    map.insert(term.base, term.is_not);
                 }
             }
 
@@ -178,6 +180,8 @@ pub fn optimize_logic_d1(expr: LogicalExpression) -> LogicalExpression {
                     } else {
                         return LogicalExpression::Constant(true);
                     }
+                } else {
+                    map.insert(term.base, term.is_not);
                 }
             }
 

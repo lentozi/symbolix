@@ -18,9 +18,9 @@ fn main() {
     };
     let compiled = jit_compile_numeric(semantic).expect("failed to JIT compile semantic IR");
     let result = compiled
-        .calculate(&[3.0, 10.0])
+        .calculate_named(&[("z", 10.0), ("x", 3.0)])
         .expect("failed to execute JIT function");
 
-    println!("variables: {:?}", compiled.variables());
+    println!("parameters: {:?}", compiled.parameters());
     println!("result: {result}");
 }
