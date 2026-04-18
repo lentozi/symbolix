@@ -34,7 +34,7 @@ pub fn flatten_numeric(expr: NumericExpression) -> NumericExpression {
                 }
 
                 let mut flattened_bucket = numeric_bucket![flattened_expression];
-                flattened_bucket.extend(&bucket);
+                flattened_bucket.append(&mut bucket);
                 NumericExpression::Multiplication(flattened_bucket)
             } else if expressions.len() == 1 {
                 let the_only_expression = match expressions.pop() {
@@ -42,12 +42,10 @@ pub fn flatten_numeric(expr: NumericExpression) -> NumericExpression {
                     None => panic!("failed to get the only expression"),
                 };
                 let mut flattened_bucket = numeric_bucket![the_only_expression];
-                flattened_bucket.extend(&bucket);
+                flattened_bucket.append(&mut bucket);
                 NumericExpression::Multiplication(flattened_bucket)
             } else {
-                let mut flattened_bucket = numeric_bucket![];
-                flattened_bucket.extend(&bucket);
-                NumericExpression::Multiplication(flattened_bucket)
+                NumericExpression::Multiplication(bucket)
             }
         }
         NumericExpression::Power { base, exponent } => NumericExpression::Power {

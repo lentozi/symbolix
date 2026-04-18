@@ -1,14 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
     lexer::constant::Number,
-    logical_bucket, numeric_bucket,
     optimizer::optimize_term::{
         extract_addition_term, extract_logical_term, extract_multiply_term, rebuild_addition_term,
         rebuild_logical_term, rebuild_multiply_term, AdditionTerm, LogicalTerm, MultiplyTerm,
     },
-    semantic::semantic_ir::{
-        logic::LogicalExpression, numeric::NumericExpression, SemanticExpression,
+    semantic::{
+        bucket::{LogicalBucket, NumericBucket},
+        semantic_ir::{logic::LogicalExpression, numeric::NumericExpression, SemanticExpression},
     },
 };
 
@@ -30,64 +30,52 @@ pub fn optimize_d1(expr: &mut SemanticExpression) {
 pub fn optimize_numeric_d1(expr: NumericExpression) -> NumericExpression {
     match expr {
         NumericExpression::Addition(bucket) => {
-            let optimized_expressions: Vec<NumericExpression> =
-                bucket.into_iter().map(optimize_numeric_d1).collect();
-
-            let optimized_terms: Vec<AdditionTerm> = optimized_expressions
-                .into_iter()
-                .map(extract_addition_term)
-                .collect::<Vec<AdditionTerm>>();
-
             let mut map: HashMap<NumericExpression, Number> = HashMap::new();
-            for term in optimized_terms {
-                if map.get(&term.core).is_some() {
-                    let existing_coef = map.get(&term.core).unwrap().clone();
-                    map.insert(term.core, existing_coef + term.coef);
-                } else {
-                    map.insert(term.core, term.coef);
+            for term in bucket
+                .into_iter()
+                .map(optimize_numeric_d1)
+                .map(extract_addition_term)
+            {
+                match map.entry(term.core) {
+                    Entry::Occupied(mut entry) => {
+                        let updated = entry.get().clone() + term.coef;
+                        entry.insert(updated);
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(term.coef);
+                    }
                 }
             }
 
-            let optimized_semantics: Vec<NumericExpression> = map
+            let bucket: NumericBucket = map
                 .into_iter()
                 .map(|(core, coef)| rebuild_addition_term(AdditionTerm::new(coef, core)))
                 .collect();
 
-            let mut bucket = numeric_bucket![];
-            for expr in optimized_semantics {
-                bucket.push(expr);
-            }
-
             NumericExpression::Addition(bucket)
         }
         NumericExpression::Multiplication(bucket) => {
-            let optimized_expressions: Vec<NumericExpression> =
-                bucket.into_iter().map(optimize_numeric_d1).collect();
-
-            let optimized_terms: Vec<MultiplyTerm> = optimized_expressions
-                .into_iter()
-                .map(extract_multiply_term)
-                .collect::<Vec<MultiplyTerm>>();
-
             let mut map: HashMap<NumericExpression, Number> = HashMap::new();
-            for term in optimized_terms {
-                if map.get(&term.base).is_some() {
-                    let existing_coef = map.get(&term.base).unwrap().clone();
-                    map.insert(term.base, existing_coef + term.exponent);
-                } else {
-                    map.insert(term.base, term.exponent);
+            for term in bucket
+                .into_iter()
+                .map(optimize_numeric_d1)
+                .map(extract_multiply_term)
+            {
+                match map.entry(term.base) {
+                    Entry::Occupied(mut entry) => {
+                        let updated = entry.get().clone() + term.exponent;
+                        entry.insert(updated);
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(term.exponent);
+                    }
                 }
             }
 
-            let optimized_semantics: Vec<NumericExpression> = map
+            let bucket: NumericBucket = map
                 .into_iter()
                 .map(|(base, exponent)| rebuild_multiply_term(MultiplyTerm { base, exponent }))
                 .collect();
-
-            let mut bucket = numeric_bucket![];
-            for expr in optimized_semantics {
-                bucket.push(expr);
-            }
 
             NumericExpression::Multiplication(bucket)
         }
@@ -128,72 +116,46 @@ pub fn optimize_numeric_d1(expr: NumericExpression) -> NumericExpression {
 pub fn optimize_logic_d1(expr: LogicalExpression) -> LogicalExpression {
     match expr {
         LogicalExpression::And(bucket) => {
-            let optimized_expressions: Vec<LogicalExpression> =
-                bucket.into_iter().map(optimize_logic_d1).collect();
-
-            let optimized_terms: Vec<LogicalTerm> = optimized_expressions
-                .into_iter()
-                .map(extract_logical_term)
-                .collect::<Vec<LogicalTerm>>();
-
             let mut map: HashMap<LogicalExpression, bool> = HashMap::new();
-            for term in optimized_terms {
-                if map.get(&term.base).is_some() {
-                    let existing_is_not = map.get(&term.base).unwrap();
-                    if term.is_not == *existing_is_not {
-                        map.insert(term.base, *existing_is_not);
-                    } else {
-                        return LogicalExpression::Constant(false);
+            for term in bucket.into_iter().map(optimize_logic_d1).map(extract_logical_term) {
+                match map.entry(term.base) {
+                    Entry::Occupied(entry) => {
+                        if term.is_not != *entry.get() {
+                            return LogicalExpression::Constant(false);
+                        }
                     }
-                } else {
-                    map.insert(term.base, term.is_not);
+                    Entry::Vacant(entry) => {
+                        entry.insert(term.is_not);
+                    }
                 }
             }
 
-            let optimized_semantics: Vec<LogicalExpression> = map
+            let bucket: LogicalBucket = map
                 .into_iter()
                 .map(|(expr, is_not)| rebuild_logical_term(LogicalTerm::new(expr, is_not)))
                 .collect();
-
-            let mut bucket = logical_bucket![];
-            for expr in optimized_semantics {
-                bucket.push(expr);
-            }
 
             LogicalExpression::And(bucket)
         }
         LogicalExpression::Or(bucket) => {
-            let optimized_expressions: Vec<LogicalExpression> =
-                bucket.into_iter().map(optimize_logic_d1).collect();
-
-            let optimized_terms: Vec<LogicalTerm> = optimized_expressions
-                .into_iter()
-                .map(extract_logical_term)
-                .collect::<Vec<LogicalTerm>>();
-
             let mut map: HashMap<LogicalExpression, bool> = HashMap::new();
-            for term in optimized_terms {
-                if map.get(&term.base).is_some() {
-                    let existing_is_not = map.get(&term.base).unwrap();
-                    if term.is_not == *existing_is_not {
-                        map.insert(term.base, *existing_is_not);
-                    } else {
-                        return LogicalExpression::Constant(true);
+            for term in bucket.into_iter().map(optimize_logic_d1).map(extract_logical_term) {
+                match map.entry(term.base) {
+                    Entry::Occupied(entry) => {
+                        if term.is_not != *entry.get() {
+                            return LogicalExpression::Constant(true);
+                        }
                     }
-                } else {
-                    map.insert(term.base, term.is_not);
+                    Entry::Vacant(entry) => {
+                        entry.insert(term.is_not);
+                    }
                 }
             }
 
-            let optimized_semantics: Vec<LogicalExpression> = map
+            let bucket: LogicalBucket = map
                 .into_iter()
                 .map(|(expr, is_not)| rebuild_logical_term(LogicalTerm::new(expr, is_not)))
                 .collect();
-
-            let mut bucket = logical_bucket![];
-            for expr in optimized_semantics {
-                bucket.push(expr);
-            }
 
             LogicalExpression::Or(bucket)
         }

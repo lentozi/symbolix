@@ -42,12 +42,15 @@ pub fn extract_addition_term(expr: NumericExpression) -> AdditionTerm {
             AdditionTerm::new(Number::Integer(1), NumericExpression::Constant(c))
         }
         NumericExpression::Negation(inner) => AdditionTerm::new(Number::Integer(-1), *inner),
-        NumericExpression::Multiplication(bucket) => {
+        NumericExpression::Multiplication(mut bucket) => {
             if bucket.contains_constant() {
-                let coef: Number = bucket.get_constants().into_iter().sum();
-                let bucket = bucket.without_constants();
+                let coef: Number = bucket.drain_constants().sum();
+                let bucket = bucket.without_constants_owned();
                 if bucket.len() == 1 {
-                    let expr = bucket.iter().next().unwrap();
+                    let expr = bucket
+                        .into_iter()
+                        .next()
+                        .expect("single-item bucket must yield one expression");
                     AdditionTerm::new(coef, expr)
                 } else {
                     AdditionTerm::new(coef, NumericExpression::Multiplication(bucket))

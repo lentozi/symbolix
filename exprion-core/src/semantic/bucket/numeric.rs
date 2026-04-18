@@ -74,15 +74,49 @@ impl NumericBucket {
         self.expressions.extend(other.expressions.clone());
     }
 
+    pub fn append(&mut self, other: &mut NumericBucket) {
+        self.constants.append(&mut other.constants);
+        self.variables.append(&mut other.variables);
+        self.expressions.append(&mut other.expressions);
+    }
+
     pub fn execute_constant(&mut self, add: bool) {
-        if add {
-            let sum: Number = self.constants.iter().cloned().sum();
-            self.constants.clear();
-            self.constants.push(sum);
+        if self.constants.len() <= 1 {
+            return;
+        }
+
+        let folded = if add {
+            self.constants.iter().cloned().sum()
         } else {
-            let product: Number = self.constants.iter().cloned().product();
-            self.constants.clear();
-            self.constants.push(product);
+            self.constants.iter().cloned().product()
+        };
+        self.constants.clear();
+        self.constants.push(folded);
+    }
+
+    pub fn drain_constants(&mut self) -> impl Iterator<Item = Number> + '_ {
+        self.constants.drain(..)
+    }
+
+    pub fn into_non_constants(self) -> Vec<NumericExpression> {
+        let mut exprs = self.expressions;
+        exprs.reserve(self.variables.len());
+        exprs.extend(self.variables.into_iter().map(NumericExpression::variable));
+        exprs
+    }
+
+    pub fn without_constants_owned(mut self) -> NumericBucket {
+        self.constants.clear();
+        self
+    }
+
+    pub fn into_single(self) -> Option<NumericExpression> {
+        let mut iter = self.into_iter();
+        let first = iter.next()?;
+        if iter.next().is_none() {
+            Some(first)
+        } else {
+            None
         }
     }
 

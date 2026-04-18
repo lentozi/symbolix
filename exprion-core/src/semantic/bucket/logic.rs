@@ -51,16 +51,24 @@ impl LogicalBucket {
         self.expressions.extend(other.expressions.clone());
     }
 
+    pub fn append(&mut self, other: &mut LogicalBucket) {
+        self.constants.append(&mut other.constants);
+        self.variables.append(&mut other.variables);
+        self.expressions.append(&mut other.expressions);
+    }
+
     pub fn execute_constant(&mut self, op_and: bool) {
-        if op_and {
-            let result = self.constants.iter().all(|&c| c);
-            self.constants.clear();
-            self.constants.push(result);
-        } else {
-            let result = self.constants.iter().any(|&c| c);
-            self.constants.clear();
-            self.constants.push(result);
+        if self.constants.len() <= 1 {
+            return;
         }
+
+        let result = if op_and {
+            self.constants.iter().all(|&c| c)
+        } else {
+            self.constants.iter().any(|&c| c)
+        };
+        self.constants.clear();
+        self.constants.push(result);
     }
 
     pub fn iter(&self) -> LogicalBucketIter<'_> {

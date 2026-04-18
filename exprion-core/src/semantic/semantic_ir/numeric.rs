@@ -49,10 +49,18 @@ impl NumericExpression {
             NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr.clone())),
             NumericExpression::Negation(inner) => *inner.clone(),
             NumericExpression::Addition(v) => {
-                let negated_terms: NumericBucket = v
-                    .iter()
-                    .map(|term| NumericExpression::negation(&term))
-                    .collect();
+                let mut negated_terms = NumericBucket::new();
+                negated_terms
+                    .constants
+                    .extend(v.constants.iter().map(|constant| -constant));
+                negated_terms.expressions.extend(
+                    v.variables
+                        .iter()
+                        .map(|variable| NumericExpression::negation(&NumericExpression::Variable(variable.clone()))),
+                );
+                negated_terms
+                    .expressions
+                    .extend(v.expressions.iter().map(NumericExpression::negation));
                 NumericExpression::Addition(negated_terms)
             }
             NumericExpression::Multiplication(v) => NumericExpression::multiplication(
@@ -354,10 +362,20 @@ impl NumericExpression {
                 }
             }
             (NumericExpression::Multiplication(v), exponent) => {
-                let new_factors: NumericBucket = v
-                    .iter()
-                    .map(|factor| NumericExpression::power(&factor, exponent))
-                    .collect();
+                let mut new_factors = NumericBucket::new();
+                new_factors.expressions.extend(
+                    v.constants
+                        .iter()
+                        .map(|constant| NumericExpression::power(&NumericExpression::Constant(constant.clone()), exponent)),
+                );
+                new_factors.expressions.extend(
+                    v.variables
+                        .iter()
+                        .map(|variable| NumericExpression::power(&NumericExpression::Variable(variable.clone()), exponent)),
+                );
+                new_factors
+                    .expressions
+                    .extend(v.expressions.iter().map(|factor| NumericExpression::power(factor, exponent)));
                 NumericExpression::Multiplication(new_factors)
             }
             (base, exponent) => NumericExpression::Power {
@@ -428,18 +446,10 @@ impl NumericExpression {
                 NumericExpression::negation(&inner.substitute(target, replacement))
             }
             NumericExpression::Addition(bucket) => {
-                let mut iter = bucket.iter().map(|expr| expr.substitute(target, replacement));
-                match iter.next() {
-                    Some(first) => iter.fold(first, |acc, expr| acc + expr),
-                    None => NumericExpression::constant(Number::integer(0)),
-                }
+                substitute_numeric_bucket(bucket, target, replacement, true)
             }
             NumericExpression::Multiplication(bucket) => {
-                let mut iter = bucket.iter().map(|expr| expr.substitute(target, replacement));
-                match iter.next() {
-                    Some(first) => iter.fold(first, |acc, expr| acc * expr),
-                    None => NumericExpression::constant(Number::integer(1)),
-                }
+                substitute_numeric_bucket(bucket, target, replacement, false)
             }
             NumericExpression::Power { base, exponent } => NumericExpression::power(
                 &base.substitute(target, replacement),
@@ -493,12 +503,11 @@ impl fmt::Display for NumericExpression {
                 write!(f, "-({})", n)
             }
             NumericExpression::Addition(bucket) => {
-                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
+                let terms = render_numeric_bucket(bucket);
                 write!(f, "({})", terms.join(" + "))
             }
             NumericExpression::Multiplication(bucket) => {
-                let factors: Vec<String> =
-                    bucket.iter().map(|factor| format!("{}", factor)).collect();
+                let factors = render_numeric_bucket(bucket);
                 write!(f, "({})", factors.join(" * "))
             }
             NumericExpression::Power { base, exponent } => {
@@ -515,5 +524,58 @@ impl fmt::Display for NumericExpression {
             }
         }
     }
+}
+
+fn substitute_numeric_bucket(
+    bucket: &NumericBucket,
+    target: &crate::semantic::variable::Variable,
+    replacement: Option<&NumericExpression>,
+    additive: bool,
+) -> NumericExpression {
+    let mut folded: Option<NumericExpression> = None;
+
+    for constant in &bucket.constants {
+        let expr = NumericExpression::Constant(constant.clone());
+        folded = Some(match folded {
+            Some(acc) if additive => acc + expr,
+            Some(acc) => acc * expr,
+            None => expr,
+        });
+    }
+
+    for variable in &bucket.variables {
+        let expr = NumericExpression::Variable(variable.clone()).substitute(target, replacement);
+        folded = Some(match folded {
+            Some(acc) if additive => acc + expr,
+            Some(acc) => acc * expr,
+            None => expr,
+        });
+    }
+
+    for expr in &bucket.expressions {
+        let expr = expr.substitute(target, replacement);
+        folded = Some(match folded {
+            Some(acc) if additive => acc + expr,
+            Some(acc) => acc * expr,
+            None => expr,
+        });
+    }
+
+    folded.unwrap_or_else(|| {
+        if additive {
+            NumericExpression::constant(Number::integer(0))
+        } else {
+            NumericExpression::constant(Number::integer(1))
+        }
+    })
+}
+
+fn render_numeric_bucket(bucket: &NumericBucket) -> Vec<String> {
+    let mut rendered =
+        Vec::with_capacity(bucket.constants.len() + bucket.variables.len() + bucket.expressions.len());
+    rendered.extend(bucket.constants.iter().map(|constant| constant.to_string()));
+    rendered.extend(bucket.variables.iter().map(|variable| variable.to_string()));
+    rendered.extend(bucket.expressions.iter().map(|expr| expr.to_string()));
+    rendered
 }
 

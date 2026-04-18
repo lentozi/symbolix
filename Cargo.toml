@@ -1,5 +1,6 @@
 [workspace]
 members = ["exprion-core", "exprion-compile", "exprion-engine", "exprion-api"]
+exclude = ["perf-harness"]
 
 [package]
 name = "exprion"
@@ -11,3 +12,4 @@ license-file = "LICENSE"
 exprion-core = { path = "./exprion-core" }
 exprion-compile = { path = "./exprion-compile" }
 exprion-engine = { path = "./exprion-engine" }
+exprion-api = { path = "./exprion-api" }

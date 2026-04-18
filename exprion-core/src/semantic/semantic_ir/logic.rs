@@ -39,13 +39,33 @@ impl LogicalExpression {
             LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr.clone())),
             LogicalExpression::Not(inner) => *inner.clone(),
             LogicalExpression::And(v) => {
-                let negated_terms: LogicalBucket =
-                    v.iter().map(|term| LogicalExpression::not(&term)).collect();
+                let mut negated_terms = LogicalBucket::new();
+                negated_terms
+                    .constants
+                    .extend(v.constants.iter().map(|constant| !constant));
+                negated_terms.expressions.extend(
+                    v.variables
+                        .iter()
+                        .map(|variable| LogicalExpression::not(&LogicalExpression::Variable(variable.clone()))),
+                );
+                negated_terms
+                    .expressions
+                    .extend(v.expressions.iter().map(LogicalExpression::not));
                 LogicalExpression::Or(negated_terms)
             }
             LogicalExpression::Or(v) => {
-                let negated_terms: LogicalBucket =
-                    v.iter().map(|term| LogicalExpression::not(&term)).collect();
+                let mut negated_terms = LogicalBucket::new();
+                negated_terms
+                    .constants
+                    .extend(v.constants.iter().map(|constant| !constant));
+                negated_terms.expressions.extend(
+                    v.variables
+                        .iter()
+                        .map(|variable| LogicalExpression::not(&LogicalExpression::Variable(variable.clone()))),
+                );
+                negated_terms
+                    .expressions
+                    .extend(v.expressions.iter().map(LogicalExpression::not));
                 LogicalExpression::And(negated_terms)
             }
             LogicalExpression::Relation {
@@ -110,8 +130,8 @@ impl LogicalExpression {
             }
             // l + And
             (l, LogicalExpression::And(v)) => {
-                let mut combined = logical_bucket![l.clone()];
-                combined.extend(v);
+                let mut combined = v.clone();
+                combined.push(l.clone());
                 LogicalExpression::And(combined)
             }
             // fallback
@@ -141,8 +161,8 @@ impl LogicalExpression {
             }
             // l + Or
             (l, LogicalExpression::Or(v)) => {
-                let mut combined = logical_bucket![l.clone()];
-                combined.extend(v);
+                let mut combined = v.clone();
+                combined.push(l.clone());
                 LogicalExpression::Or(combined)
             }
             (l, r) => LogicalExpression::Or(logical_bucket![l.clone(), r.clone()]),
@@ -206,22 +226,10 @@ impl LogicalExpression {
                 LogicalExpression::not(&inner.substitute(target, replacement))
             }
             LogicalExpression::And(bucket) => {
-                let mut iter = bucket
-                    .iter()
-                    .map(|expr| expr.substitute(target, replacement));
-                match iter.next() {
-                    Some(first) => iter.fold(first, |acc, expr| acc & expr),
-                    None => LogicalExpression::constant(true),
-                }
+                substitute_logical_bucket(bucket, target, replacement, true)
             }
             LogicalExpression::Or(bucket) => {
-                let mut iter = bucket
-                    .iter()
-                    .map(|expr| expr.substitute(target, replacement));
-                match iter.next() {
-                    Some(first) => iter.fold(first, |acc, expr| acc | expr),
-                    None => LogicalExpression::constant(false),
-                }
+                substitute_logical_bucket(bucket, target, replacement, false)
             }
             LogicalExpression::Relation {
                 left,
@@ -269,11 +277,11 @@ impl fmt::Display for LogicalExpression {
                 write!(f, "NOT ({})", n)
             }
             LogicalExpression::And(bucket) => {
-                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
+                let terms = render_logical_bucket(bucket);
                 write!(f, "({})", terms.join(" AND "))
             }
             LogicalExpression::Or(bucket) => {
-                let terms: Vec<String> = bucket.iter().map(|term| format!("{}", term)).collect();
+                let terms = render_logical_bucket(bucket);
                 write!(f, "({})", terms.join(" OR "))
             }
             LogicalExpression::Relation {
@@ -285,5 +293,58 @@ impl fmt::Display for LogicalExpression {
             }
         }
     }
+}
+
+fn substitute_logical_bucket(
+    bucket: &LogicalBucket,
+    target: &Variable,
+    replacement: Option<&crate::semantic::semantic_ir::SemanticExpression>,
+    and_mode: bool,
+) -> LogicalExpression {
+    let mut folded: Option<LogicalExpression> = None;
+
+    for constant in &bucket.constants {
+        let expr = LogicalExpression::Constant(*constant);
+        folded = Some(match folded {
+            Some(acc) if and_mode => acc & expr,
+            Some(acc) => acc | expr,
+            None => expr,
+        });
+    }
+
+    for variable in &bucket.variables {
+        let expr = LogicalExpression::Variable(variable.clone()).substitute(target, replacement);
+        folded = Some(match folded {
+            Some(acc) if and_mode => acc & expr,
+            Some(acc) => acc | expr,
+            None => expr,
+        });
+    }
+
+    for expr in &bucket.expressions {
+        let expr = expr.substitute(target, replacement);
+        folded = Some(match folded {
+            Some(acc) if and_mode => acc & expr,
+            Some(acc) => acc | expr,
+            None => expr,
+        });
+    }
+
+    folded.unwrap_or_else(|| {
+        if and_mode {
+            LogicalExpression::constant(true)
+        } else {
+            LogicalExpression::constant(false)
+        }
+    })
+}
+
+fn render_logical_bucket(bucket: &LogicalBucket) -> Vec<String> {
+    let mut rendered =
+        Vec::with_capacity(bucket.constants.len() + bucket.variables.len() + bucket.expressions.len());
+    rendered.extend(bucket.constants.iter().map(|constant| constant.to_string()));
+    rendered.extend(bucket.variables.iter().map(|variable| variable.to_string()));
+    rendered.extend(bucket.expressions.iter().map(|expr| expr.to_string()));
+    rendered
 }
 
