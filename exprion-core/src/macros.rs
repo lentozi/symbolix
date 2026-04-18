@@ -2,7 +2,7 @@
 #[macro_export]
 macro_rules! new_compile_context {
     { $($body:tt)* } => {{
-        let mut ctx_arc = std::sync::Arc::new($crate::context::CompileContext::new());
+        let mut ctx_arc = std::rc::Rc::new($crate::context::CompileContext::new());
 
         $crate::context::CompileContext::push_current(&ctx_arc, |ctx| {
             $($body)*

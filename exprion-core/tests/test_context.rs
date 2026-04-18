@@ -1,6 +1,6 @@
 use std::{
     panic::{catch_unwind, AssertUnwindSafe},
-    sync::Arc,
+    rc::Rc,
 };
 
 use exprion_core::{
@@ -20,7 +20,7 @@ fn variable(name: &str, var_type: VariableType) -> Variable {
 
 #[test]
 fn push_current_tracks_stack_and_scopes() {
-    let ctx = Arc::new(CompileContext::new());
+    let ctx = Rc::new(CompileContext::new());
     assert!(CompileContext::current().is_none());
     assert!(CompileContext::current_mut().is_none());
 
@@ -86,17 +86,17 @@ fn push_error_queues_non_fatal_and_panics_on_fatal() {
 
 #[test]
 fn compile_context_exit_removes_current_stack_entry() {
-    let mut ctx = std::sync::Arc::new(CompileContext::new());
+    let mut ctx = std::rc::Rc::new(CompileContext::new());
     CompileContext::push_current(&ctx, |_| {
         assert!(CompileContext::current().is_some());
     });
 
-    let inner = std::sync::Arc::new(CompileContext::new());
+    let inner = std::rc::Rc::new(CompileContext::new());
     CompileContext::push_current(&inner, |_| {
         assert!(CompileContext::current().is_some());
     });
 
-    let raw = std::sync::Arc::get_mut(&mut ctx).unwrap();
+    let raw = std::rc::Rc::get_mut(&mut ctx).unwrap();
     raw.exit();
     assert!(CompileContext::current().is_none());
 }

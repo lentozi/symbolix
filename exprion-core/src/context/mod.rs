@@ -7,5 +7,5 @@ pub use runtime::RuntimeContext;
 
 #[doc(hidden)]
 pub mod testing {
-    pub use super::symbol_table::SymbolTable;
+    pub use super::symbol_table::{SymbolTable, VariableStack};
 }

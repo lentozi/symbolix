@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    sync::{Arc, RwLock},
+    rc::Rc,
 };
 
 use crate::{
@@ -17,21 +17,21 @@ pub enum ExprType {
 }
 
 pub struct CompileContext {
-    pub symbol_table: RwLock<SymbolTable>,
-    pub error_queue: RwLock<Vec<ErrorExt>>,
+    pub symbol_table: RefCell<SymbolTable>,
+    pub error_queue: RefCell<Vec<ErrorExt>>,
 }
 
 impl CompileContext {
     pub fn new() -> Self {
         Self {
-            symbol_table: RwLock::new(SymbolTable::new()),
-            error_queue: RwLock::new(Vec::new()),
+            symbol_table: RefCell::new(SymbolTable::new()),
+            error_queue: RefCell::new(Vec::new()),
         }
     }
 
-    pub fn push_current<R>(ctx: &Arc<Self>, f: impl FnOnce(&Self) -> R) -> R {
+    pub fn push_current<R>(ctx: &Rc<Self>, f: impl FnOnce(&Self) -> R) -> R {
         COMPILE_CONTEXT_STACK.with(|stack| {
-            stack.borrow_mut().push(Arc::clone(ctx));
+            stack.borrow_mut().push(Rc::clone(ctx));
             let result = f(&*ctx);
             let ctx = stack.borrow_mut().pop().unwrap();
             ctx.print_errors();
@@ -39,11 +39,11 @@ impl CompileContext {
         })
     }
 
-    pub fn current() -> Option<Arc<CompileContext>> {
+    pub fn current() -> Option<Rc<CompileContext>> {
         COMPILE_CONTEXT_STACK.with(|stack| stack.borrow().last().cloned())
     }
 
-    pub fn current_mut() -> Option<Arc<CompileContext>> {
+    pub fn current_mut() -> Option<Rc<CompileContext>> {
         COMPILE_CONTEXT_STACK.with(|stack| stack.borrow_mut().last().cloned())
     }
 
@@ -59,21 +59,15 @@ impl CompileContext {
     }
 
     fn enter_new_var_scope(&self) {
-        self.symbol_table
-            .write()
-            .expect("rwlock poisoned")
-            .enter_scope();
+        self.symbol_table.borrow_mut().push_scope();
     }
 
     fn exit_var_scope(&self) {
-        self.symbol_table
-            .write()
-            .expect("rwlock poisoned")
-            .exit_scope();
+        self.symbol_table.borrow_mut().pop_scope();
     }
 
     pub fn register_variable(&self, variable: Variable) {
-        let mut table = self.symbol_table.write().expect("rwlock poisoned");
+        let mut table = self.symbol_table.borrow_mut();
         if let Some(existing) = table.get(&variable.name) {
             if existing.var_type != variable.var_type
                 && existing.var_type != VariableType::Unknown
@@ -82,26 +76,21 @@ impl CompileContext {
                 panic!("variable {} has conflicting types", variable.name);
             }
         } else {
-            table.insert(variable.name.to_string(), variable);
+            table.define(variable);
         }
     }
 
     pub fn search_variable(&self, variable_name: &str) -> Option<Variable> {
-        let table = self.symbol_table.write().expect("rwlock poisoned");
-        if let Some(existing) = table.get(variable_name) {
-            Some(existing.clone())
-        } else {
-            None
-        }
+        self.symbol_table.borrow().get(variable_name).cloned()
     }
 
     pub fn collect_variables(&self) -> Vec<Variable> {
-        let table = self.symbol_table.read().expect("rwlock poisoned");
+        let table = self.symbol_table.borrow();
         table.collect()
     }
 
     pub fn collect_all_variables(&self) -> Vec<Variable> {
-        let table = self.symbol_table.read().expect("rwlock poisoned");
+        let table = self.symbol_table.borrow();
         table.collect_all()
     }
 
@@ -110,13 +99,13 @@ impl CompileContext {
             self.print_errors();
             panic!("fatal error: {}", error.error_message());
         } else {
-            let mut errors = self.error_queue.write().expect("rwlock poisoned");
+            let mut errors = self.error_queue.borrow_mut();
             errors.push(error.clone());
         }
     }
 
     pub fn print_errors(&self) {
-        let errors = self.error_queue.read().expect("rwlock poisoned");
+        let errors = self.error_queue.borrow();
         for error in errors.iter() {
             println!("Error {}: {}", error.error_id(), error.error_message());
         }
@@ -124,5 +113,5 @@ impl CompileContext {
 }
 
 thread_local! {
-    static COMPILE_CONTEXT_STACK: RefCell<Vec<Arc<CompileContext>>> = RefCell::new(Vec::new());
+    static COMPILE_CONTEXT_STACK: RefCell<Vec<Rc<CompileContext>>> = RefCell::new(Vec::new());
 }

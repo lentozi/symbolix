@@ -5,64 +5,92 @@ use crate::semantic::variable::Variable;
 pub type Scope = HashMap<String, Variable>;
 
 #[derive(Debug, Clone)]
-pub struct SymbolTable {
+pub struct VariableStack {
     scopes: Vec<Scope>,
 }
 
-impl SymbolTable {
+pub type SymbolTable = VariableStack;
+
+impl VariableStack {
     pub fn new() -> Self {
-        let mut table = SymbolTable { scopes: Vec::new() };
-        table.enter_scope();
-        table
+        let mut stack = VariableStack { scopes: Vec::new() };
+        stack.push_scope();
+        stack
     }
 
-    pub fn enter_scope(&mut self) {
+    pub fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
     }
 
-    pub fn exit_scope(&mut self) {
+    pub fn pop_scope(&mut self) {
         self.scopes.pop();
     }
 
-    pub fn insert(&mut self, name: String, symbol: Variable) {
-        if let Some(current_scope) = self.scopes.last_mut() {
-            current_scope.insert(name, symbol);
+    pub fn current_scope(&self) -> Option<&Scope> {
+        self.scopes.last()
+    }
+
+    pub fn current_scope_mut(&mut self) -> Option<&mut Scope> {
+        self.scopes.last_mut()
+    }
+
+    pub fn define(&mut self, variable: Variable) {
+        if let Some(scope) = self.current_scope_mut() {
+            scope.insert(variable.name.clone(), variable);
         }
     }
 
-    pub fn get(&self, name: &str) -> Option<&Variable> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(symbol) = scope.get(name) {
-                return Some(symbol);
-            }
-        }
-        None
+    pub fn resolve(&self, name: &str) -> Option<&Variable> {
+        self.scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name))
     }
 
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut Variable> {
-        for scope in self.scopes.iter_mut().rev() {
-            if let Some(symbol) = scope.get_mut(name) {
-                return Some(symbol);
-            }
-        }
-        None
+    pub fn resolve_mut(&mut self, name: &str) -> Option<&mut Variable> {
+        self.scopes
+            .iter_mut()
+            .rev()
+            .find_map(|scope| scope.get_mut(name))
     }
 
-    pub fn collect(&self) -> Vec<Variable> {
-        if let Some(current_scope) = self.scopes.last() {
-            current_scope.values().cloned().collect()
-        } else {
-            Vec::new()
-        }
+    pub fn collect_current(&self) -> Vec<Variable> {
+        self.current_scope()
+            .map(|scope| scope.values().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn collect_all(&self) -> Vec<Variable> {
         let mut variables = Vec::new();
         for scope in self.scopes.iter().rev() {
-            for (_, symbol) in scope {
-                variables.push(symbol.clone());
-            }
+            variables.extend(scope.values().cloned());
         }
         variables
+    }
+
+    pub fn enter_scope(&mut self) {
+        self.push_scope();
+    }
+
+    pub fn exit_scope(&mut self) {
+        self.pop_scope();
+    }
+
+    pub fn insert(&mut self, name: String, symbol: Variable) {
+        if let Some(scope) = self.current_scope_mut() {
+            scope.insert(name, symbol);
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Variable> {
+        self.resolve(name)
+    }
+
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Variable> {
+        self.resolve_mut(name)
+    }
+
+    pub fn collect(&self) -> Vec<Variable> {
+        self.collect_current()
     }
 }
