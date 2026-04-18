@@ -1,0 +1,103 @@
+[[cases]]
+name = "api_default_expr"
+kind = "api_default"
+expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
+build_iters = 20000
+compile_iters = 2000
+exec_iters = 1000000
+warmup_iters = 1000
+repeat = 5
+
+[cases.result]
+checksum = 3818448.6340786573
+
+[cases.result.build]
+samples = 5
+
+[cases.result.build.mean]
+total_ms = 381.9303
+avg_ns = 19096.515
+iter_s = 56703.70106858814
+
+[cases.result.build.min]
+total_ms = 224.6472
+avg_ns = 11232.36
+iter_s = 89028.48555423794
+
+[cases.result.compile]
+samples = 5
+
+[cases.result.compile.mean]
+total_ms = 2318.3363200000003
+avg_ns = 1159168.1600000001
+iter_s = 881.6664507495004
+
+[cases.result.compile.min]
+total_ms = 2019.9767
+avg_ns = 1009988.35
+iter_s = 990.1104304816981
+
+[cases.result.execute]
+samples = 5
+
+[cases.result.execute.mean]
+total_ms = 27.689000000000004
+avg_ns = 27.689
+iter_s = 38375754.82784296
+
+[cases.result.execute.min]
+total_ms = 19.7739
+avg_ns = 19.7739
+iter_s = 50571713.217928685
+
+[[cases]]
+name = "string_default_expr"
+kind = "string"
+expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
+build_iters = 20000
+compile_iters = 2000
+exec_iters = 1000000
+warmup_iters = 1000
+repeat = 5
+
+[cases.result]
+checksum = 3818448.6340786573
+
+[cases.result.build]
+samples = 5
+
+[cases.result.build.mean]
+total_ms = 308.49372
+avg_ns = 15424.685999999998
+iter_s = 65888.22240857189
+
+[cases.result.build.min]
+total_ms = 267.197
+avg_ns = 13359.850000000002
+iter_s = 74851.13979573123
+
+[cases.result.compile]
+samples = 5
+
+[cases.result.compile.mean]
+total_ms = 3058.44512
+avg_ns = 1529222.56
+iter_s = 666.4973480177741
+
+[cases.result.compile.min]
+total_ms = 2659.5334
+avg_ns = 1329766.7
+iter_s = 752.0116122625119
+
+[cases.result.execute]
+samples = 5
+
+[cases.result.execute.mean]
+total_ms = 21.49024
+avg_ns = 21.49024
+iter_s = 46571550.6963878
+
+[cases.result.execute.min]
+total_ms = 20.7144
+avg_ns = 20.7144
+iter_s = 48275595.72085119
