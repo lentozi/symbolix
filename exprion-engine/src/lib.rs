@@ -57,12 +57,16 @@ impl JitNumericFunction {
                 actual: arguments.len(),
             });
         }
-        Ok(self.kernel.call(arguments))
+        Ok(self.calculate_unchecked(arguments))
     }
 
     pub fn calculate_named(&self, arguments: &[(&str, f64)]) -> Result<f64, JitError> {
         let values = resolve_named_arguments(&self.parameters, &self.parameter_lookup, arguments)?;
         self.calculate(&values)
+    }
+
+    pub fn calculate_unchecked(&self, arguments: &[f64]) -> f64 {
+        self.kernel.call(arguments)
     }
 }
 

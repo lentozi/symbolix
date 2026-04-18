@@ -132,9 +132,7 @@ fn benchmark_execute(
     let warmup_count = warmup_iters.min(inputs.len());
     for values in &inputs[..warmup_count] {
         black_box(
-            compiled
-                .calculate(black_box(values))
-                .expect("failed to execute JIT function"),
+            compiled.calculate_unchecked(black_box(values)),
         );
     }
 
@@ -144,9 +142,7 @@ fn benchmark_execute(
         let start = Instant::now();
         let mut run_checksum = 0.0;
         for values in &inputs {
-            run_checksum += compiled
-                .calculate(black_box(values))
-                .expect("failed to execute JIT function");
+            run_checksum += compiled.calculate_unchecked(black_box(values));
         }
         if run == 0 {
             checksum = run_checksum;
