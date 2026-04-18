@@ -8,8 +8,8 @@ pub use error::JitError;
 
 use exprion_core::semantic::semantic_ir::SemanticExpression;
 
-use backend::{compile_logical, compile_numeric, CompiledLogicalKernel, CompiledNumericKernel};
-use lowering::{lower_logical_semantic, lower_numeric_semantic};
+use backend::{compile_numeric, CompiledNumericKernel};
+use lowering::lower_numeric_semantic;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterInfo {
@@ -28,27 +28,10 @@ pub fn jit_compile_numeric(semantic: SemanticExpression) -> Result<JitNumericFun
     })
 }
 
-pub fn jit_compile_logical(semantic: SemanticExpression) -> Result<JitLogicalFunction, JitError> {
-    let (logical, parameters) = lower_logical_semantic(semantic)?;
-    let parameter_lookup = build_parameter_lookup(&parameters);
-    let kernel = compile_logical(&logical, &parameters)?;
-    Ok(JitLogicalFunction {
-        parameters,
-        parameter_lookup,
-        kernel,
-    })
-}
-
 pub struct JitNumericFunction {
     parameters: Vec<ParameterInfo>,
     parameter_lookup: HashMap<String, usize>,
     kernel: Box<dyn CompiledNumericKernel>,
-}
-
-pub struct JitLogicalFunction {
-    parameters: Vec<ParameterInfo>,
-    parameter_lookup: HashMap<String, usize>,
-    kernel: Box<dyn CompiledLogicalKernel>,
 }
 
 impl JitNumericFunction {
@@ -78,38 +61,6 @@ impl JitNumericFunction {
     }
 
     pub fn calculate_named(&self, arguments: &[(&str, f64)]) -> Result<f64, JitError> {
-        let values = resolve_named_arguments(&self.parameters, &self.parameter_lookup, arguments)?;
-        self.calculate(&values)
-    }
-}
-
-impl JitLogicalFunction {
-    pub fn arity(&self) -> usize {
-        self.parameters.len()
-    }
-
-    pub fn variables(&self) -> Vec<String> {
-        self.parameters
-            .iter()
-            .map(|parameter| parameter.name.clone())
-            .collect()
-    }
-
-    pub fn parameters(&self) -> &[ParameterInfo] {
-        &self.parameters
-    }
-
-    pub fn calculate(&self, arguments: &[f64]) -> Result<bool, JitError> {
-        if arguments.len() != self.arity() {
-            return Err(JitError::ArityMismatch {
-                expected: self.arity(),
-                actual: arguments.len(),
-            });
-        }
-        Ok(self.kernel.call(arguments))
-    }
-
-    pub fn calculate_named(&self, arguments: &[(&str, f64)]) -> Result<bool, JitError> {
         let values = resolve_named_arguments(&self.parameters, &self.parameter_lookup, arguments)?;
         self.calculate(&values)
     }
@@ -153,14 +104,13 @@ fn resolve_named_arguments(
 
 #[cfg(test)]
 mod tests {
-    use super::{jit_compile_logical, jit_compile_numeric, JitError, ParameterInfo};
+    use super::{jit_compile_numeric, JitError, ParameterInfo};
     use exprion_core::{
-        var,
         lexer::Lexer,
         new_compile_context,
         optimizer::optimize,
         parser::Parser,
-        semantic::{semantic_ir::{logic::LogicalExpression, numeric::NumericExpression, SemanticExpression}, variable::VariableType, Analyzer},
+        semantic::Analyzer,
     };
 
     fn parse_semantic(expression: &str) -> exprion_core::semantic::semantic_ir::SemanticExpression {
@@ -191,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn jit_rejects_logical_expressions_as_numeric() {
+    fn jit_rejects_logical_expressions() {
         let semantic = parse_semantic("x > 4");
         let compiled = jit_compile_numeric(semantic);
         assert!(compiled.is_err());
@@ -243,28 +193,6 @@ mod tests {
             compiled.calculate_named(&[("x", 1.0), ("x", 2.0), ("z", 3.0)]),
             Err(JitError::DuplicateArgument(name)) if name == "x"
         ));
-    }
-
-    #[test]
-    fn jit_compiles_logical_relations_with_numeric_arguments() {
-        new_compile_context! {
-            let x = var!("x", VariableType::Float, None);
-            let y = var!("y", VariableType::Float, None);
-            let logical = LogicalExpression::relation(
-                &NumericExpression::variable(x.clone()),
-                &exprion_core::lexer::symbol::Symbol::Relation(exprion_core::lexer::symbol::Relation::GreaterThan),
-                &NumericExpression::compatible_constant(4.0),
-            ) & LogicalExpression::relation(
-                &NumericExpression::variable(y.clone()),
-                &exprion_core::lexer::symbol::Symbol::Relation(exprion_core::lexer::symbol::Relation::LessThan),
-                &NumericExpression::compatible_constant(10.0),
-            );
-            let compiled = jit_compile_logical(SemanticExpression::logical(logical)).unwrap();
-
-            assert!(compiled.calculate(&[6.0, 5.0]).unwrap());
-            assert!(!compiled.calculate(&[3.0, 5.0]).unwrap());
-            assert!(!compiled.calculate(&[6.0, 12.0]).unwrap());
-        }
     }
 
     #[test]

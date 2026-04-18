@@ -31,30 +31,6 @@ pub(crate) fn lower_numeric_semantic(
     Ok((numeric, parameters))
 }
 
-pub(crate) fn lower_logical_semantic(
-    semantic: SemanticExpression,
-) -> Result<(LogicalExpression, Vec<ParameterInfo>), JitError> {
-    let logical = match semantic {
-        SemanticExpression::Logical(logical) => logical,
-        SemanticExpression::Numeric(_) => {
-            return Err(JitError::UnsupportedExpression(
-                "JIT logical compilation requires a logical expression".to_string(),
-            ))
-        }
-    };
-
-    let parameter_names = collect_logical_numeric_variables(&logical)?
-        .into_iter()
-        .collect::<Vec<_>>();
-    let parameters = parameter_names
-        .into_iter()
-        .enumerate()
-        .map(|(index, name)| ParameterInfo { name, index })
-        .collect::<Vec<_>>();
-
-    Ok((logical, parameters))
-}
-
 fn collect_numeric_variables(expr: &NumericExpression) -> Result<BTreeSet<String>, JitError> {
     let mut names = BTreeSet::new();
     collect_numeric_variables_into(expr, &mut names)?;
@@ -123,14 +99,6 @@ fn collect_logical_variables(
     }
 
     Ok(())
-}
-
-fn collect_logical_numeric_variables(
-    expr: &LogicalExpression,
-) -> Result<BTreeSet<String>, JitError> {
-    let mut names = BTreeSet::new();
-    collect_logical_variables(expr, &mut names)?;
-    Ok(names)
 }
 
 fn assert_numeric_variable(variable: &Variable) -> Result<(), JitError> {

@@ -12,12 +12,11 @@ use exprion_core::{
 };
 
 use crate::{
-    backend::{Backend, CompiledLogicalKernel, CompiledNumericKernel},
+    backend::{Backend, CompiledNumericKernel},
     JitError, ParameterInfo,
 };
 
 type NumericEntry = unsafe extern "C" fn(*const f64) -> f64;
-type LogicalEntry = unsafe extern "C" fn(*const f64) -> u8;
 
 type LLVMContextRef = *mut c_void;
 type LLVMModuleRef = *mut c_void;
@@ -45,11 +44,6 @@ pub(crate) struct LlvmNumericKernel {
     entry: NumericEntry,
 }
 
-pub(crate) struct LlvmLogicalKernel {
-    _execution_engine: LLVMExecutionEngineRef,
-    entry: LogicalEntry,
-}
-
 impl Backend for McjitBackend {
     fn compile_numeric(
         expr: &NumericExpression,
@@ -57,24 +51,11 @@ impl Backend for McjitBackend {
     ) -> Result<Box<dyn CompiledNumericKernel>, JitError> {
         Ok(Box::new(LlvmNumericKernel::compile(expr, parameters)?))
     }
-
-    fn compile_logical(
-        expr: &LogicalExpression,
-        parameters: &[ParameterInfo],
-    ) -> Result<Box<dyn CompiledLogicalKernel>, JitError> {
-        Ok(Box::new(LlvmLogicalKernel::compile(expr, parameters)?))
-    }
 }
 
 impl CompiledNumericKernel for LlvmNumericKernel {
     fn call(&self, arguments: &[f64]) -> f64 {
         unsafe { (self.entry)(arguments.as_ptr()) }
-    }
-}
-
-impl CompiledLogicalKernel for LlvmLogicalKernel {
-    fn call(&self, arguments: &[f64]) -> bool {
-        unsafe { (self.entry)(arguments.as_ptr()) != 0 }
     }
 }
 
@@ -165,105 +146,6 @@ impl LlvmNumericKernel {
             }
 
             let entry = unsafe { mem::transmute::<usize, NumericEntry>(address as usize) };
-            Ok((execution_engine, entry))
-        })();
-
-        unsafe {
-            LLVMDisposeBuilder(builder);
-        }
-
-        match compiled {
-            Ok((execution_engine, entry)) => Ok(Self {
-                _execution_engine: execution_engine,
-                entry,
-            }),
-            Err(err) => {
-                unsafe {
-                    LLVMDisposeModule(module);
-                    LLVMContextDispose(context);
-                }
-                Err(err)
-            }
-        }
-    }
-}
-
-impl LlvmLogicalKernel {
-    fn compile(
-        expr: &LogicalExpression,
-        parameters: &[ParameterInfo],
-    ) -> Result<Self, JitError> {
-        let _guard = llvm_global_lock()
-            .lock()
-            .map_err(|_| JitError::Codegen("LLVM global lock was poisoned".to_string()))?;
-        initialize_native_target()?;
-
-        let context = unsafe { LLVMContextCreate() };
-        if context.is_null() {
-            return Err(JitError::Codegen("LLVMContextCreate returned null".to_string()));
-        }
-
-        let module_name = cstring("exprion_engine_logical_module")?;
-        let module = unsafe { LLVMModuleCreateWithNameInContext(module_name.as_ptr(), context) };
-        if module.is_null() {
-            unsafe { LLVMContextDispose(context) };
-            return Err(JitError::Codegen(
-                "LLVMModuleCreateWithNameInContext returned null".to_string(),
-            ));
-        }
-
-        let builder = unsafe { LLVMCreateBuilderInContext(context) };
-        if builder.is_null() {
-            unsafe {
-                LLVMDisposeModule(module);
-                LLVMContextDispose(context);
-            }
-            return Err(JitError::Codegen(
-                "LLVMCreateBuilderInContext returned null".to_string(),
-            ));
-        }
-
-        let compiled = (|| {
-            let bool_type = unsafe { LLVMInt1TypeInContext(context) };
-            let return_type = unsafe { LLVMInt8TypeInContext(context) };
-            let double_type = unsafe { LLVMDoubleTypeInContext(context) };
-            let pointer_type = unsafe { LLVMPointerType(double_type, 0) };
-            let mut params = [pointer_type];
-            let function_type =
-                unsafe { LLVMFunctionType(return_type, params.as_mut_ptr(), 1, 0) };
-            let function_name = cstring("exprion_logical_entry")?;
-            let function =
-                unsafe { LLVMAddFunction(module, function_name.as_ptr(), function_type) };
-
-            let block_name = cstring("entry")?;
-            let entry_block =
-                unsafe { LLVMAppendBasicBlockInContext(context, function, block_name.as_ptr()) };
-            unsafe { LLVMPositionBuilderAtEnd(builder, entry_block) };
-
-            let args_ptr = unsafe { LLVMGetParam(function, 0) };
-            let variable_slots = parameter_slots(parameters);
-
-            let result = lower_logical(expr, builder, context, args_ptr, &variable_slots)?;
-            let extend_name = cstring("logical_ret")?;
-            let widened =
-                unsafe { LLVMBuildZExt(builder, result, return_type, extend_name.as_ptr()) };
-            let _ = bool_type;
-            unsafe {
-                LLVMBuildRet(builder, widened);
-            }
-
-            verify_module(module)?;
-            let execution_engine = create_execution_engine(module)?;
-            let address =
-                unsafe { LLVMGetFunctionAddress(execution_engine, function_name.as_ptr()) };
-            if address == 0 {
-                unsafe { LLVMDisposeExecutionEngine(execution_engine) };
-                return Err(JitError::Codegen(
-                    "LLVMGetFunctionAddress returned 0".to_string(),
-                ));
-            }
-
-            let entry = unsafe { mem::transmute::<usize, LogicalEntry>(address as usize) };
             Ok((execution_engine, entry))
         })();
 
