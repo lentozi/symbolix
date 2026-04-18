@@ -120,6 +120,19 @@ impl NumericBucket {
         }
     }
 
+    pub fn single_item(&self) -> Option<NumericExpression> {
+        if self.len() != 1 {
+            return None;
+        }
+        if let Some(constant) = self.constants.first() {
+            return Some(NumericExpression::Constant(constant.clone()));
+        }
+        if let Some(variable) = self.variables.first() {
+            return Some(NumericExpression::Variable(variable.clone()));
+        }
+        self.expressions.first().cloned()
+    }
+
     pub fn iter(&'_ self) -> NumericBucketIter<'_> {
         NumericBucketIter {
             bucket: self,

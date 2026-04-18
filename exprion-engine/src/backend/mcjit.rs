@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ffi::{c_char, c_uint, c_void, CString},
+    ffi::{c_char, c_uint, c_void},
     mem,
     ptr,
     sync::{Mutex, Once, OnceLock},
@@ -17,6 +17,7 @@ use crate::{
 };
 
 type NumericEntry = unsafe extern "C" fn(*const f64) -> f64;
+type VariableSlots<'a> = HashMap<&'a str, usize>;
 
 type LLVMContextRef = *mut c_void;
 type LLVMModuleRef = *mut c_void;
@@ -74,8 +75,9 @@ impl LlvmNumericKernel {
             return Err(JitError::Codegen("LLVMContextCreate returned null".to_string()));
         }
 
-        let module_name = cstring("exprion_engine_module")?;
-        let module = unsafe { LLVMModuleCreateWithNameInContext(module_name.as_ptr(), context) };
+        let module = unsafe {
+            LLVMModuleCreateWithNameInContext(static_cstr(b"exprion_engine_module\0"), context)
+        };
         if module.is_null() {
             unsafe { LLVMContextDispose(context) };
             return Err(JitError::Codegen(
@@ -100,14 +102,14 @@ impl LlvmNumericKernel {
             let mut params = [pointer_type];
             let function_type =
                 unsafe { LLVMFunctionType(double_type, params.as_mut_ptr(), 1, 0) };
-            let function_name = cstring("exprion_numeric_entry")?;
-            let function =
-                unsafe { LLVMAddFunction(module, function_name.as_ptr(), function_type) };
+            let function = unsafe {
+                LLVMAddFunction(module, static_cstr(b"exprion_numeric_entry\0"), function_type)
+            };
             let runtime_pow = declare_runtime_pow(module, context)?;
 
-            let block_name = cstring("entry")?;
-            let entry_block =
-                unsafe { LLVMAppendBasicBlockInContext(context, function, block_name.as_ptr()) };
+            let entry_block = unsafe {
+                LLVMAppendBasicBlockInContext(context, function, static_cstr(b"entry\0"))
+            };
             unsafe { LLVMPositionBuilderAtEnd(builder, entry_block) };
 
             let args_ptr = unsafe { LLVMGetParam(function, 0) };
@@ -136,8 +138,9 @@ impl LlvmNumericKernel {
                     exprion_runtime_pow as *mut c_void,
                 );
             }
-            let address =
-                unsafe { LLVMGetFunctionAddress(execution_engine, function_name.as_ptr()) };
+            let address = unsafe {
+                LLVMGetFunctionAddress(execution_engine, static_cstr(b"exprion_numeric_entry\0"))
+            };
             if address == 0 {
                 unsafe { LLVMDisposeExecutionEngine(execution_engine) };
                 return Err(JitError::Codegen(
@@ -169,10 +172,10 @@ impl LlvmNumericKernel {
     }
 }
 
-fn parameter_slots(parameters: &[ParameterInfo]) -> HashMap<String, usize> {
+fn parameter_slots(parameters: &[ParameterInfo]) -> VariableSlots<'_> {
     parameters
         .iter()
-        .map(|parameter| (parameter.name.clone(), parameter.index))
+        .map(|parameter| (parameter.name.as_str(), parameter.index))
         .collect()
 }
 
@@ -187,7 +190,7 @@ fn lower_numeric(
     context: LLVMContextRef,
     double_type: LLVMTypeRef,
     args_ptr: LLVMValueRef,
-    variable_slots: &HashMap<String, usize>,
+    variable_slots: &VariableSlots<'_>,
     runtime_pow: LLVMValueRef,
 ) -> Result<LLVMValueRef, JitError> {
     match expr {
@@ -195,25 +198,7 @@ fn lower_numeric(
             Ok(unsafe { LLVMConstReal(double_type, number.to_float()) })
         }
         NumericExpression::Variable(variable) => {
-            let index = variable_slots.get(&variable.name).ok_or_else(|| {
-                JitError::Codegen(format!("missing variable slot for `{}`", variable.name))
-            })?;
-
-            let index_value = unsafe { LLVMConstInt(LLVMInt64Type(), *index as u64, 0) };
-            let mut indices = [index_value];
-            let gep_name = cstring(&format!("{}_ptr", variable.name))?;
-            let value_name = cstring(&variable.name)?;
-            let value_ptr = unsafe {
-                LLVMBuildGEP2(
-                    builder,
-                    double_type,
-                    args_ptr,
-                    indices.as_mut_ptr(),
-                    1,
-                    gep_name.as_ptr(),
-                )
-            };
-            Ok(unsafe { LLVMBuildLoad2(builder, double_type, value_ptr, value_name.as_ptr()) })
+            lower_variable(variable, builder, double_type, args_ptr, variable_slots)
         }
         NumericExpression::Negation(inner) => {
             let value = lower_numeric(
@@ -225,66 +210,39 @@ fn lower_numeric(
                 variable_slots,
                 runtime_pow,
             )?;
-            let name = cstring("neg")?;
-            Ok(unsafe { LLVMBuildFNeg(builder, value, name.as_ptr()) })
+            Ok(unsafe { LLVMBuildFNeg(builder, value, static_cstr(b"neg\0")) })
         }
         NumericExpression::Addition(bucket) => {
-            let mut iter = bucket.iter();
-            let Some(first) = iter.next() else {
-                return Ok(unsafe { LLVMConstReal(double_type, 0.0) });
-            };
-            let mut acc = lower_numeric(
-                &first,
+            lower_numeric_bucket(
+                &bucket.constants,
+                &bucket.variables,
+                &bucket.expressions,
                 builder,
                 context,
                 double_type,
                 args_ptr,
                 variable_slots,
                 runtime_pow,
-            )?;
-            for term in iter {
-                let rhs = lower_numeric(
-                    &term,
-                    builder,
-                    context,
-                    double_type,
-                    args_ptr,
-                    variable_slots,
-                    runtime_pow,
-                )?;
-                let name = cstring("addtmp")?;
-                acc = unsafe { LLVMBuildFAdd(builder, acc, rhs, name.as_ptr()) };
-            }
-            Ok(acc)
+                0.0,
+                b"addtmp\0",
+                LLVMBuildFAdd,
+            )
         }
         NumericExpression::Multiplication(bucket) => {
-            let mut iter = bucket.iter();
-            let Some(first) = iter.next() else {
-                return Ok(unsafe { LLVMConstReal(double_type, 1.0) });
-            };
-            let mut acc = lower_numeric(
-                &first,
+            lower_numeric_bucket(
+                &bucket.constants,
+                &bucket.variables,
+                &bucket.expressions,
                 builder,
                 context,
                 double_type,
                 args_ptr,
                 variable_slots,
                 runtime_pow,
-            )?;
-            for term in iter {
-                let rhs = lower_numeric(
-                    &term,
-                    builder,
-                    context,
-                    double_type,
-                    args_ptr,
-                    variable_slots,
-                    runtime_pow,
-                )?;
-                let name = cstring("multmp")?;
-                acc = unsafe { LLVMBuildFMul(builder, acc, rhs, name.as_ptr()) };
-            }
-            Ok(acc)
+                1.0,
+                b"multmp\0",
+                LLVMBuildFMul,
+            )
         }
         NumericExpression::Power { base, exponent } => {
             let base = lower_numeric(
@@ -305,7 +263,6 @@ fn lower_numeric(
                 variable_slots,
                 runtime_pow,
             )?;
-            let call_name = cstring("powtmp")?;
             let function_type = unsafe {
                 let mut params = [double_type, double_type];
                 LLVMFunctionType(double_type, params.as_mut_ptr(), 2, 0)
@@ -318,7 +275,7 @@ fn lower_numeric(
                     runtime_pow,
                     args.as_mut_ptr(),
                     2,
-                    call_name.as_ptr(),
+                    static_cstr(b"powtmp\0"),
                 )
             })
         }
@@ -348,9 +305,8 @@ fn lower_numeric(
                     variable_slots,
                     runtime_pow,
                 )?;
-                let select_name = cstring("piecewise")?;
                 current = unsafe {
-                    LLVMBuildSelect(builder, cond, then_value, current, select_name.as_ptr())
+                    LLVMBuildSelect(builder, cond, then_value, current, static_cstr(b"piecewise\0"))
                 };
             }
             Ok(current)
@@ -363,7 +319,7 @@ fn lower_logical(
     builder: LLVMBuilderRef,
     context: LLVMContextRef,
     args_ptr: LLVMValueRef,
-    variable_slots: &HashMap<String, usize>,
+    variable_slots: &VariableSlots<'_>,
 ) -> Result<LLVMValueRef, JitError> {
     let bool_type = unsafe { LLVMInt1TypeInContext(context) };
     match expr {
@@ -376,34 +332,35 @@ fn lower_logical(
         LogicalExpression::Not(inner) => {
             let value = lower_logical(inner, builder, context, args_ptr, variable_slots)?;
             let true_value = unsafe { LLVMConstInt(bool_type, 1, 0) };
-            let name = cstring("nottmp")?;
-            Ok(unsafe { LLVMBuildXor(builder, value, true_value, name.as_ptr()) })
+            Ok(unsafe { LLVMBuildXor(builder, value, true_value, static_cstr(b"nottmp\0")) })
         }
         LogicalExpression::And(bucket) => {
-            let mut iter = bucket.iter();
-            let Some(first) = iter.next() else {
-                return Ok(unsafe { LLVMConstInt(bool_type, 1, 0) });
-            };
-            let mut acc = lower_logical(&first, builder, context, args_ptr, variable_slots)?;
-            for term in iter {
-                let rhs = lower_logical(&term, builder, context, args_ptr, variable_slots)?;
-                let name = cstring("andtmp")?;
-                acc = unsafe { LLVMBuildAnd(builder, acc, rhs, name.as_ptr()) };
-            }
-            Ok(acc)
+            lower_logical_bucket(
+                &bucket.constants,
+                &bucket.variables,
+                &bucket.expressions,
+                builder,
+                context,
+                args_ptr,
+                variable_slots,
+                true,
+                b"andtmp\0",
+                LLVMBuildAnd,
+            )
         }
         LogicalExpression::Or(bucket) => {
-            let mut iter = bucket.iter();
-            let Some(first) = iter.next() else {
-                return Ok(unsafe { LLVMConstInt(bool_type, 0, 0) });
-            };
-            let mut acc = lower_logical(&first, builder, context, args_ptr, variable_slots)?;
-            for term in iter {
-                let rhs = lower_logical(&term, builder, context, args_ptr, variable_slots)?;
-                let name = cstring("ortmp")?;
-                acc = unsafe { LLVMBuildOr(builder, acc, rhs, name.as_ptr()) };
-            }
-            Ok(acc)
+            lower_logical_bucket(
+                &bucket.constants,
+                &bucket.variables,
+                &bucket.expressions,
+                builder,
+                context,
+                args_ptr,
+                variable_slots,
+                false,
+                b"ortmp\0",
+                LLVMBuildOr,
+            )
         }
         LogicalExpression::Relation { left, operator, right } => {
             let double_type = unsafe { LLVMDoubleTypeInContext(context) };
@@ -426,10 +383,148 @@ fn lower_logical(
                 ptr::null_mut(),
             )?;
             let predicate = real_predicate(operator)?;
-            let name = cstring("cmptmp")?;
-            Ok(unsafe { LLVMBuildFCmp(builder, predicate, lhs, rhs, name.as_ptr()) })
+            Ok(unsafe { LLVMBuildFCmp(builder, predicate, lhs, rhs, static_cstr(b"cmptmp\0")) })
         }
     }
+}
+
+fn lower_variable(
+    variable: &exprion_core::semantic::variable::Variable,
+    builder: LLVMBuilderRef,
+    double_type: LLVMTypeRef,
+    args_ptr: LLVMValueRef,
+    variable_slots: &VariableSlots<'_>,
+) -> Result<LLVMValueRef, JitError> {
+    let index = variable_slots.get(variable.name.as_str()).ok_or_else(|| {
+        JitError::Codegen(format!("missing variable slot for `{}`", variable.name))
+    })?;
+
+    let index_value = unsafe { LLVMConstInt(LLVMInt64Type(), *index as u64, 0) };
+    let mut indices = [index_value];
+    let value_ptr = unsafe {
+        LLVMBuildGEP2(
+            builder,
+            double_type,
+            args_ptr,
+            indices.as_mut_ptr(),
+            1,
+            static_cstr(b"var_ptr\0"),
+        )
+    };
+    Ok(unsafe { LLVMBuildLoad2(builder, double_type, value_ptr, static_cstr(b"var\0")) })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_numeric_bucket(
+    constants: &[exprion_core::lexer::constant::Number],
+    variables: &[exprion_core::semantic::variable::Variable],
+    expressions: &[NumericExpression],
+    builder: LLVMBuilderRef,
+    context: LLVMContextRef,
+    double_type: LLVMTypeRef,
+    args_ptr: LLVMValueRef,
+    variable_slots: &VariableSlots<'_>,
+    runtime_pow: LLVMValueRef,
+    empty_value: f64,
+    temp_name: &'static [u8],
+    combine: unsafe extern "C" fn(
+        LLVMBuilderRef,
+        LLVMValueRef,
+        LLVMValueRef,
+        *const c_char,
+    ) -> LLVMValueRef,
+) -> Result<LLVMValueRef, JitError> {
+    let mut acc = None;
+
+    for constant in constants {
+        let value = unsafe { LLVMConstReal(double_type, constant.to_float()) };
+        acc = Some(match acc {
+            Some(lhs) => {
+                unsafe { combine(builder, lhs, value, static_cstr(temp_name)) }
+            }
+            None => value,
+        });
+    }
+
+    for variable in variables {
+        let value = lower_variable(variable, builder, double_type, args_ptr, variable_slots)?;
+        acc = Some(match acc {
+            Some(lhs) => {
+                unsafe { combine(builder, lhs, value, static_cstr(temp_name)) }
+            }
+            None => value,
+        });
+    }
+
+    for expression in expressions {
+        let value = lower_numeric(
+            expression,
+            builder,
+            context,
+            double_type,
+            args_ptr,
+            variable_slots,
+            runtime_pow,
+        )?;
+        acc = Some(match acc {
+            Some(lhs) => {
+                unsafe { combine(builder, lhs, value, static_cstr(temp_name)) }
+            }
+            None => value,
+        });
+    }
+
+    Ok(acc.unwrap_or_else(|| unsafe { LLVMConstReal(double_type, empty_value) }))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lower_logical_bucket(
+    constants: &[bool],
+    variables: &[exprion_core::semantic::variable::Variable],
+    expressions: &[LogicalExpression],
+    builder: LLVMBuilderRef,
+    context: LLVMContextRef,
+    args_ptr: LLVMValueRef,
+    variable_slots: &VariableSlots<'_>,
+    empty_value: bool,
+    temp_name: &'static [u8],
+    combine: unsafe extern "C" fn(
+        LLVMBuilderRef,
+        LLVMValueRef,
+        LLVMValueRef,
+        *const c_char,
+    ) -> LLVMValueRef,
+) -> Result<LLVMValueRef, JitError> {
+    let bool_type = unsafe { LLVMInt1TypeInContext(context) };
+    let mut acc = None;
+
+    for constant in constants {
+        let value = unsafe { LLVMConstInt(bool_type, if *constant { 1 } else { 0 }, 0) };
+        acc = Some(match acc {
+            Some(lhs) => {
+                unsafe { combine(builder, lhs, value, static_cstr(temp_name)) }
+            }
+            None => value,
+        });
+    }
+
+    for variable in variables {
+        return Err(JitError::UnsupportedLogicalVariable(variable.name.clone()));
+    }
+
+    for expression in expressions {
+        let value = lower_logical(expression, builder, context, args_ptr, variable_slots)?;
+        acc = Some(match acc {
+            Some(lhs) => {
+                unsafe { combine(builder, lhs, value, static_cstr(temp_name)) }
+            }
+            None => value,
+        });
+    }
+
+    Ok(acc.unwrap_or_else(|| unsafe {
+        LLVMConstInt(bool_type, if empty_value { 1 } else { 0 }, 0)
+    }))
 }
 
 fn real_predicate(operator: &Symbol) -> Result<LLVMRealPredicate, JitError> {
@@ -453,8 +548,7 @@ fn declare_runtime_pow(
     let double_type = unsafe { LLVMDoubleTypeInContext(context) };
     let mut params = [double_type, double_type];
     let function_type = unsafe { LLVMFunctionType(double_type, params.as_mut_ptr(), 2, 0) };
-    let name = cstring("exprion_runtime_pow")?;
-    Ok(unsafe { LLVMAddFunction(module, name.as_ptr(), function_type) })
+    Ok(unsafe { LLVMAddFunction(module, static_cstr(b"exprion_runtime_pow\0"), function_type) })
 }
 
 extern "C" fn exprion_runtime_pow(base: f64, exponent: f64) -> f64 {
@@ -554,9 +648,8 @@ fn take_message(message: *mut c_char) -> String {
     text
 }
 
-fn cstring(value: &str) -> Result<CString, JitError> {
-    CString::new(value)
-        .map_err(|_| JitError::Codegen(format!("string contains interior null byte: {value:?}")))
+fn static_cstr(value: &'static [u8]) -> *const c_char {
+    value.as_ptr().cast()
 }
 
 #[repr(C)]

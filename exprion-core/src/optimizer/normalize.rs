@@ -31,7 +31,7 @@ pub fn normalize_numeric(expr: &mut NumericExpression) {
             if bucket.len() == 0 {
                 unreachable!();
             } else if bucket.len() == 1 {
-                *expr = bucket.iter().next().unwrap();
+                *expr = bucket.single_item().unwrap();
             }
         }
         NumericExpression::Multiplication(bucket) => {
@@ -44,7 +44,7 @@ pub fn normalize_numeric(expr: &mut NumericExpression) {
             if bucket.len() == 0 {
                 *expr = NumericExpression::Constant(Number::Integer(0));
             } else if bucket.len() == 1 {
-                *expr = bucket.iter().next().unwrap();
+                *expr = bucket.single_item().unwrap();
             } else if bucket.contains_zero() {
                 *expr = NumericExpression::Constant(Number::Integer(0));
             }
@@ -81,7 +81,7 @@ pub fn normalize_logic(expr: &mut LogicalExpression) {
             if bucket.len() == 0 {
                 *expr = LogicalExpression::Constant(true);
             } else if bucket.len() == 1 {
-                *expr = bucket.iter().next().unwrap();
+                *expr = bucket.single_item().unwrap();
             }
         }
         LogicalExpression::Or(bucket) => {
@@ -94,7 +94,7 @@ pub fn normalize_logic(expr: &mut LogicalExpression) {
             if bucket.len() == 0 {
                 unreachable!();
             } else if bucket.len() == 1 {
-                *expr = bucket.iter().next().unwrap();
+                *expr = bucket.single_item().unwrap();
             }
         }
         LogicalExpression::Not(n) => {

@@ -86,6 +86,19 @@ impl LogicalBucket {
     pub fn remove_false(&mut self) {
         self.constants.retain(|&c| c);
     }
+
+    pub fn single_item(&self) -> Option<LogicalExpression> {
+        if self.len() != 1 {
+            return None;
+        }
+        if let Some(constant) = self.constants.first() {
+            return Some(LogicalExpression::Constant(*constant));
+        }
+        if let Some(variable) = self.variables.first() {
+            return Some(LogicalExpression::Variable(variable.clone()));
+        }
+        self.expressions.first().cloned()
+    }
 }
 
 impl<'a> Iterator for LogicalBucketIter<'a> {
