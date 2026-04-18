@@ -165,8 +165,8 @@ impl NumericExpression {
                 NumericExpression::Addition(new_bucket)
             }
             (NumericExpression::Addition(v), NumericExpression::Constant(n)) => {
-                let mut combined = numeric_bucket![NumericExpression::Constant(n.clone())];
-                combined.extend(v);
+                let mut combined = v.clone();
+                combined.constants.push(n.clone());
                 NumericExpression::Addition(combined)
             }
             (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
@@ -181,13 +181,13 @@ impl NumericExpression {
                 ])
             }
             (NumericExpression::Addition(v), r) => {
-                let mut new_bucket = numeric_bucket![r.clone()];
-                new_bucket.extend(v);
+                let mut new_bucket = v.clone();
+                new_bucket.push(r.clone());
                 NumericExpression::Addition(new_bucket)
             }
             (l, NumericExpression::Addition(v)) => {
-                let mut combined = numeric_bucket![l.clone()];
-                combined.extend(v);
+                let mut combined = v.clone();
+                combined.push(l.clone());
                 NumericExpression::Addition(combined)
             }
             (l, r) => NumericExpression::Addition(numeric_bucket![l.clone(), r.clone()]),
@@ -297,13 +297,13 @@ impl NumericExpression {
                 NumericExpression::Multiplication(new_bucket)
             }
             (NumericExpression::Multiplication(v), NumericExpression::Constant(n)) => {
-                let mut combined = numeric_bucket![NumericExpression::Constant(n.clone())];
-                combined.extend(&v);
+                let mut combined = v.clone();
+                combined.constants.push(n.clone());
                 NumericExpression::Multiplication(combined)
             }
             (NumericExpression::Multiplication(v), r) => {
-                let mut new_bucket = numeric_bucket![r.clone()];
-                new_bucket.extend(v);
+                let mut new_bucket = v.clone();
+                new_bucket.push(r.clone());
                 NumericExpression::Multiplication(new_bucket)
             }
             (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
@@ -317,8 +317,8 @@ impl NumericExpression {
                 ])
             }
             (l, NumericExpression::Multiplication(v)) => {
-                let mut combined = numeric_bucket![l.clone()];
-                combined.extend(v);
+                let mut combined = v.clone();
+                combined.push(l.clone());
                 NumericExpression::Multiplication(combined)
             }
             (l, r) => NumericExpression::Multiplication(numeric_bucket![l.clone(), r.clone()]),

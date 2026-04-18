@@ -1,4 +1,5 @@
 /target
+/perf-harness/target
 .ai/
 .codex/
 .mcp/
