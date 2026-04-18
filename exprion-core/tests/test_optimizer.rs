@@ -14,6 +14,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 
 fn numeric_var(name: &str) -> Variable {
     Variable {
+        name_id: 0,
         name: name.to_string(),
         var_type: VariableType::Float,
         value: None,
@@ -22,6 +23,7 @@ fn numeric_var(name: &str) -> Variable {
 
 fn bool_var(name: &str) -> Variable {
     Variable {
+        name_id: 0,
         name: name.to_string(),
         var_type: VariableType::Boolean,
         value: None,

@@ -1,3 +1,4 @@
+use crate::context::NameId;
 use crate::lexer::constant::Constant;
 use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
@@ -20,6 +21,7 @@ pub enum VariableType {
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Variable {
+    pub name_id: NameId,
     pub name: String,
     pub var_type: VariableType,
     pub value: Option<Constant>,
@@ -46,13 +48,7 @@ impl Variable {
      * 初始化时会自动注册到编译上下文中
      */
     pub fn new(name: &str, var_type: VariableType, init_val: Option<Constant>) -> Variable {
-        let variable = Variable {
-            name: name.to_string(),
-            var_type,
-            value: init_val,
-        };
-        with_compile_context!(ctx, ctx.register_variable(variable.clone()));
-        variable
+        with_compile_context!(ctx, ctx.resolve_variable_with_value(name, var_type, init_val))
     }
 
     pub fn to_expression(&self) -> SemanticExpression {

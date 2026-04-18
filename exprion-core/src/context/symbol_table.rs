@@ -2,18 +2,25 @@ use std::collections::HashMap;
 
 use crate::semantic::variable::Variable;
 
-pub type Scope = HashMap<String, Variable>;
+pub type NameId = u32;
+pub type Scope = HashMap<NameId, Variable>;
 
 #[derive(Debug, Clone)]
 pub struct VariableStack {
     scopes: Vec<Scope>,
+    names: HashMap<String, NameId>,
+    next_name_id: NameId,
 }
 
 pub type SymbolTable = VariableStack;
 
 impl VariableStack {
     pub fn new() -> Self {
-        let mut stack = VariableStack { scopes: Vec::new() };
+        let mut stack = VariableStack {
+            scopes: Vec::new(),
+            names: HashMap::new(),
+            next_name_id: 0,
+        };
         stack.push_scope();
         stack
     }
@@ -35,23 +42,32 @@ impl VariableStack {
     }
 
     pub fn define(&mut self, variable: Variable) {
+        let name_id = if variable.name_id != 0 {
+            variable.name_id
+        } else {
+            self.intern_name(&variable.name)
+        };
+        let mut variable = variable;
+        variable.name_id = name_id;
         if let Some(scope) = self.current_scope_mut() {
-            scope.insert(variable.name.clone(), variable);
+            scope.insert(name_id, variable);
         }
     }
 
     pub fn resolve(&self, name: &str) -> Option<&Variable> {
+        let name_id = self.name_id(name)?;
         self.scopes
             .iter()
             .rev()
-            .find_map(|scope| scope.get(name))
+            .find_map(|scope| scope.get(&name_id))
     }
 
     pub fn resolve_mut(&mut self, name: &str) -> Option<&mut Variable> {
+        let name_id = self.name_id(name)?;
         self.scopes
             .iter_mut()
             .rev()
-            .find_map(|scope| scope.get_mut(name))
+            .find_map(|scope| scope.get_mut(&name_id))
     }
 
     pub fn collect_current(&self) -> Vec<Variable> {
@@ -77,8 +93,9 @@ impl VariableStack {
     }
 
     pub fn insert(&mut self, name: String, symbol: Variable) {
+        let name_id = self.intern_name(&name);
         if let Some(scope) = self.current_scope_mut() {
-            scope.insert(name, symbol);
+            scope.insert(name_id, symbol);
         }
     }
 
@@ -92,5 +109,20 @@ impl VariableStack {
 
     pub fn collect(&self) -> Vec<Variable> {
         self.collect_current()
+    }
+
+    pub fn name_id(&self, name: &str) -> Option<NameId> {
+        self.names.get(name).copied()
+    }
+
+    pub fn intern_name(&mut self, name: &str) -> NameId {
+        if let Some(id) = self.name_id(name) {
+            return id;
+        }
+
+        let id = self.next_name_id;
+        self.next_name_id = self.next_name_id.wrapping_add(1);
+        self.names.insert(name.to_string(), id);
+        id
     }
 }

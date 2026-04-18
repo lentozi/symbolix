@@ -6,6 +6,7 @@ use std::{
 use crate::{
     context::symbol_table::SymbolTable,
     error::ErrorExt,
+    lexer::constant::Constant,
     semantic::variable::{Variable, VariableType},
 };
 
@@ -85,15 +86,26 @@ impl CompileContext {
     }
 
     pub fn resolve_variable(&self, variable_name: &str, var_type: VariableType) -> Variable {
+        self.resolve_variable_with_value(variable_name, var_type, None)
+    }
+
+    pub fn resolve_variable_with_value(
+        &self,
+        variable_name: &str,
+        var_type: VariableType,
+        init_val: Option<Constant>,
+    ) -> Variable {
         let mut table = self.symbol_table.borrow_mut();
         if let Some(existing) = table.get(variable_name) {
             return existing.clone();
         }
 
+        let name_id = table.intern_name(variable_name);
         let variable = Variable {
+            name_id,
             name: variable_name.to_string(),
             var_type,
-            value: None,
+            value: init_val,
         };
         table.define(variable.clone());
         variable

@@ -16,6 +16,7 @@ use exprion_core::{
 
 fn numeric_var(name: &str) -> Variable {
     Variable {
+        name_id: 0,
         name: name.to_string(),
         var_type: VariableType::Float,
         value: None,

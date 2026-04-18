@@ -12,6 +12,7 @@ use exprion_core::{
 
 fn variable(name: &str, var_type: VariableType) -> Variable {
     Variable {
+        name_id: 0,
         name: name.to_string(),
         var_type,
         value: Some(Constant::integer(1)),
