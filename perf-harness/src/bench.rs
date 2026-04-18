@@ -16,11 +16,21 @@ use crate::model::{CaseKind, PerfCase, PerfResult, PhaseSummary, TimingStats};
 pub fn benchmark_case(case: &PerfCase) -> PerfResult {
     let build = match case.kind {
         CaseKind::ApiDefault => {
-            benchmark_build(case.build_iters, case.warmup_iters, case.repeat, build_semantic_from_api)
+            benchmark_build(
+                case.build_iters,
+                case.warmup_iters,
+                case.repeat,
+                case.min_sample_ms,
+                build_semantic_from_api,
+            )
         }
-        CaseKind::String => benchmark_build(case.build_iters, case.warmup_iters, case.repeat, || {
-            build_semantic_from_string(&case.expression)
-        }),
+        CaseKind::String => benchmark_build(
+            case.build_iters,
+            case.warmup_iters,
+            case.repeat,
+            case.min_sample_ms,
+            || build_semantic_from_string(&case.expression),
+        ),
     };
 
     let semantic = match case.kind {
@@ -32,12 +42,14 @@ pub fn benchmark_case(case: &PerfCase) -> PerfResult {
         case.compile_iters,
         case.warmup_iters.min(case.compile_iters),
         case.repeat,
+        case.min_sample_ms,
         &semantic,
     );
     let (execute, checksum) = benchmark_execute(
         case.exec_iters,
         case.warmup_iters.min(case.exec_iters),
         case.repeat,
+        case.min_sample_ms,
         semantic,
     );
 
@@ -77,6 +89,7 @@ fn benchmark_build<F>(
     iterations: usize,
     warmup_iters: usize,
     repeat: usize,
+    min_sample_ms: f64,
     mut build: F,
 ) -> PhaseSummary
 where
@@ -87,11 +100,9 @@ where
     }
     let mut samples = Vec::with_capacity(repeat);
     for _ in 0..repeat {
-        let start = Instant::now();
-        for _ in 0..iterations {
+        samples.push(run_sample(iterations, min_sample_ms, |_| {
             black_box(build());
-        }
-        samples.push(compute_stats(iterations, start.elapsed()));
+        }));
     }
     summarize_phase(samples)
 }
@@ -100,6 +111,7 @@ fn benchmark_compile(
     iterations: usize,
     warmup_iters: usize,
     repeat: usize,
+    min_sample_ms: f64,
     semantic: &SemanticExpression,
 ) -> PhaseSummary {
     for _ in 0..warmup_iters {
@@ -109,13 +121,11 @@ fn benchmark_compile(
     }
     let mut samples = Vec::with_capacity(repeat);
     for _ in 0..repeat {
-        let start = Instant::now();
-        for _ in 0..iterations {
+        samples.push(run_sample(iterations, min_sample_ms, |_| {
             let compiled = jit_compile_numeric(black_box(semantic.clone()))
                 .expect("failed to JIT compile semantic IR");
             black_box(compiled.arity());
-        }
-        samples.push(compute_stats(iterations, start.elapsed()));
+        }));
     }
     summarize_phase(samples)
 }
@@ -124,30 +134,34 @@ fn benchmark_execute(
     iterations: usize,
     warmup_iters: usize,
     repeat: usize,
+    min_sample_ms: f64,
     semantic: SemanticExpression,
 ) -> (PhaseSummary, f64) {
     let compiled = jit_compile_numeric(semantic).expect("failed to JIT compile semantic IR");
     let inputs = generate_inputs(iterations, compiled.arity());
 
-    let warmup_count = warmup_iters.min(inputs.len());
-    for values in &inputs[..warmup_count] {
-        black_box(
-            compiled.calculate_unchecked(black_box(values)),
-        );
+    for i in 0..warmup_iters {
+        let values = &inputs[i % inputs.len()];
+        black_box(compiled.calculate_unchecked(black_box(values)));
     }
 
     let mut checksum = 0.0;
     let mut samples = Vec::with_capacity(repeat);
     for run in 0..repeat {
-        let start = Instant::now();
-        let mut run_checksum = 0.0;
-        for values in &inputs {
+        let mut input_index = 0usize;
+        let mut run_checksum = 0.0f64;
+        let stats = run_sample(iterations, min_sample_ms, |_| {
+            let values = &inputs[input_index];
             run_checksum += compiled.calculate_unchecked(black_box(values));
-        }
+            input_index += 1;
+            if input_index == inputs.len() {
+                input_index = 0;
+            }
+        });
         if run == 0 {
             checksum = run_checksum;
         }
-        samples.push(compute_stats(iterations, start.elapsed()));
+        samples.push(stats);
     }
 
     (summarize_phase(samples), checksum)
@@ -177,23 +191,58 @@ fn compute_stats(iterations: usize, elapsed: Duration) -> TimingStats {
     }
 }
 
+fn run_sample(
+    iterations: usize,
+    min_sample_ms: f64,
+    mut body: impl FnMut(usize),
+) -> TimingStats {
+    let min_sample_secs = min_sample_ms / 1000.0;
+    let mut batches = 1usize;
+
+    loop {
+        let start = Instant::now();
+        for _ in 0..batches {
+            for i in 0..iterations {
+                body(i);
+            }
+        }
+        let elapsed = start.elapsed();
+        if elapsed.as_secs_f64() >= min_sample_secs || batches >= (1 << 20) {
+            return compute_stats(iterations * batches, elapsed);
+        }
+
+        let ratio = (min_sample_secs / elapsed.as_secs_f64()).ceil() as usize;
+        let next = ratio.max(2);
+        batches = batches.saturating_mul(next).min(1 << 20);
+    }
+}
+
 fn summarize_phase(samples: Vec<TimingStats>) -> PhaseSummary {
     let sample_count = samples.len();
-    let min = samples
-        .iter()
-        .min_by(|a, b| a.total_ms.partial_cmp(&b.total_ms).unwrap())
-        .cloned()
-        .expect("phase must have at least one sample");
+    let mut by_avg = samples.clone();
+    by_avg.sort_by(|a, b| a.avg_ns.partial_cmp(&b.avg_ns).unwrap());
+
+    let min = by_avg.first().cloned().expect("phase must have at least one sample");
+    let max = by_avg.last().cloned().expect("phase must have at least one sample");
+    let median = by_avg[sample_count / 2].clone();
 
     let mean = TimingStats {
         total_ms: samples.iter().map(|s| s.total_ms).sum::<f64>() / sample_count as f64,
         avg_ns: samples.iter().map(|s| s.avg_ns).sum::<f64>() / sample_count as f64,
         iter_s: samples.iter().map(|s| s.iter_s).sum::<f64>() / sample_count as f64,
     };
+    let jitter_pct = if median.avg_ns > f64::EPSILON {
+        (max.avg_ns - min.avg_ns) / median.avg_ns * 100.0
+    } else {
+        0.0
+    };
 
     PhaseSummary {
         samples: sample_count,
         mean,
+        median,
         min,
+        max,
+        jitter_pct,
     }
 }

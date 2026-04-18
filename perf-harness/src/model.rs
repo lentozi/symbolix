@@ -5,6 +5,7 @@ pub const DEFAULT_COMPILE_ITERS: usize = 2_000;
 pub const DEFAULT_EXEC_ITERS: usize = 1_000_000;
 pub const DEFAULT_WARMUP_ITERS: usize = 1_000;
 pub const DEFAULT_REPEAT: usize = 5;
+pub const DEFAULT_MIN_SAMPLE_MS: f64 = 250.0;
 pub const DEFAULT_API_EXPR: &str =
     "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0";
 
@@ -28,6 +29,8 @@ pub struct PerfCase {
     pub warmup_iters: usize,
     #[serde(default = "default_repeat")]
     pub repeat: usize,
+    #[serde(default = "default_min_sample_ms")]
+    pub min_sample_ms: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<PerfResultCompat>,
 }
@@ -62,7 +65,7 @@ pub struct LegacyPerfResult {
     pub checksum: f64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TimingStats {
     pub total_ms: f64,
     pub avg_ns: f64,
@@ -73,7 +76,13 @@ pub struct TimingStats {
 pub struct PhaseSummary {
     pub samples: usize,
     pub mean: TimingStats,
+    #[serde(default)]
+    pub median: TimingStats,
     pub min: TimingStats,
+    #[serde(default)]
+    pub max: TimingStats,
+    #[serde(default)]
+    pub jitter_pct: f64,
 }
 
 pub fn default_build_iters() -> usize {
@@ -96,6 +105,10 @@ pub fn default_repeat() -> usize {
     DEFAULT_REPEAT
 }
 
+pub fn default_min_sample_ms() -> f64 {
+    DEFAULT_MIN_SAMPLE_MS
+}
+
 impl CaseKind {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -113,17 +126,26 @@ impl PerfResultCompat {
                 build: PhaseSummary {
                     samples: 1,
                     mean: result.build.clone(),
+                    median: result.build.clone(),
                     min: result.build.clone(),
+                    max: result.build.clone(),
+                    jitter_pct: 0.0,
                 },
                 compile: PhaseSummary {
                     samples: 1,
                     mean: result.compile.clone(),
+                    median: result.compile.clone(),
                     min: result.compile.clone(),
+                    max: result.compile.clone(),
+                    jitter_pct: 0.0,
                 },
                 execute: PhaseSummary {
                     samples: 1,
                     mean: result.execute.clone(),
+                    median: result.execute.clone(),
                     min: result.execute.clone(),
+                    max: result.execute.clone(),
+                    jitter_pct: 0.0,
                 },
                 checksum: result.checksum,
             },
@@ -143,6 +165,7 @@ pub fn default_case_file() -> CaseFile {
                 exec_iters: DEFAULT_EXEC_ITERS,
                 warmup_iters: DEFAULT_WARMUP_ITERS,
                 repeat: DEFAULT_REPEAT,
+                min_sample_ms: DEFAULT_MIN_SAMPLE_MS,
                 result: None,
             },
             PerfCase {
@@ -154,6 +177,7 @@ pub fn default_case_file() -> CaseFile {
                 exec_iters: DEFAULT_EXEC_ITERS,
                 warmup_iters: DEFAULT_WARMUP_ITERS,
                 repeat: DEFAULT_REPEAT,
+                min_sample_ms: DEFAULT_MIN_SAMPLE_MS,
                 result: None,
             },
         ],

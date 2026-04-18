@@ -14,12 +14,20 @@ pub fn print_case(case: &PerfCase, result: &PerfResult) {
         result.build.mean.total_ms, result.build.mean.avg_ns, result.build.mean.iter_s
     );
     println!(
+        "  build median: {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
+        result.build.median.total_ms, result.build.median.avg_ns, result.build.median.iter_s
+    );
+    println!(
         "  build min : {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
         result.build.min.total_ms, result.build.min.avg_ns, result.build.min.iter_s
     );
     println!(
         "  compile mean: {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
         result.compile.mean.total_ms, result.compile.mean.avg_ns, result.compile.mean.iter_s
+    );
+    println!(
+        "  compile median: {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
+        result.compile.median.total_ms, result.compile.median.avg_ns, result.compile.median.iter_s
     );
     println!(
         "  compile min : {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
@@ -30,8 +38,16 @@ pub fn print_case(case: &PerfCase, result: &PerfResult) {
         result.execute.mean.total_ms, result.execute.mean.avg_ns, result.execute.mean.iter_s
     );
     println!(
+        "  execute median: {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
+        result.execute.median.total_ms, result.execute.median.avg_ns, result.execute.median.iter_s
+    );
+    println!(
         "  execute min : {:.3} ms total, {:.1} ns/iter, {:.0} iter/s",
         result.execute.min.total_ms, result.execute.min.avg_ns, result.execute.min.iter_s
+    );
+    println!(
+        "  jitter: build {:.1}%, compile {:.1}%, execute {:.1}%",
+        result.build.jitter_pct, result.compile.jitter_pct, result.execute.jitter_pct
     );
     println!("  checksum: {:.6}", result.checksum);
 }
@@ -59,6 +75,11 @@ pub fn compare_and_print(previous: &CaseFile, current: &CaseFile, previous_path:
 
         println!("{}", case.name);
         print_delta(
+            "build median",
+            effective_median(&previous_result.build).avg_ns,
+            effective_median(&current_result.build).avg_ns,
+        );
+        print_delta(
             "build mean",
             previous_result.build.mean.avg_ns,
             current_result.build.mean.avg_ns,
@@ -69,6 +90,11 @@ pub fn compare_and_print(previous: &CaseFile, current: &CaseFile, previous_path:
             current_result.build.min.avg_ns,
         );
         print_delta(
+            "compile median",
+            effective_median(&previous_result.compile).avg_ns,
+            effective_median(&current_result.compile).avg_ns,
+        );
+        print_delta(
             "compile mean",
             previous_result.compile.mean.avg_ns,
             current_result.compile.mean.avg_ns,
@@ -77,6 +103,11 @@ pub fn compare_and_print(previous: &CaseFile, current: &CaseFile, previous_path:
             "compile min ",
             previous_result.compile.min.avg_ns,
             current_result.compile.min.avg_ns,
+        );
+        print_delta(
+            "execute median",
+            effective_median(&previous_result.execute).avg_ns,
+            effective_median(&current_result.execute).avg_ns,
         );
         print_delta(
             "execute mean",
@@ -110,8 +141,18 @@ pub fn compare_best_and_print(best: &CaseFile, current: &CaseFile, best_path: &P
         };
 
         println!("{}", case.name);
+        print_delta(
+            "build median",
+            effective_median(&best_result.build).avg_ns,
+            effective_median(&current_result.build).avg_ns,
+        );
         print_delta("build mean", best_result.build.mean.avg_ns, current_result.build.mean.avg_ns);
         print_delta("build min ", best_result.build.min.avg_ns, current_result.build.min.avg_ns);
+        print_delta(
+            "compile median",
+            effective_median(&best_result.compile).avg_ns,
+            effective_median(&current_result.compile).avg_ns,
+        );
         print_delta(
             "compile mean",
             best_result.compile.mean.avg_ns,
@@ -121,6 +162,11 @@ pub fn compare_best_and_print(best: &CaseFile, current: &CaseFile, best_path: &P
             "compile min ",
             best_result.compile.min.avg_ns,
             current_result.compile.min.avg_ns,
+        );
+        print_delta(
+            "execute median",
+            effective_median(&best_result.execute).avg_ns,
+            effective_median(&current_result.execute).avg_ns,
         );
         print_delta(
             "execute mean",
@@ -186,9 +232,12 @@ fn print_delta(label: &str, previous: f64, current: f64) {
 }
 
 fn is_better_result(current: &PerfResult, best: &PerfResult) -> bool {
-    compare_stats(&current.execute.mean, &best.execute.mean)
+    compare_stats(effective_median(&current.execute), effective_median(&best.execute))
+        .then_with(|| compare_stats(&current.execute.mean, &best.execute.mean))
         .then_with(|| compare_stats(&current.execute.min, &best.execute.min))
+        .then_with(|| compare_stats(effective_median(&current.compile), effective_median(&best.compile)))
         .then_with(|| compare_stats(&current.compile.mean, &best.compile.mean))
+        .then_with(|| compare_stats(effective_median(&current.build), effective_median(&best.build)))
         .then_with(|| compare_stats(&current.build.mean, &best.build.mean))
         .then_with(|| compare_stats(&current.compile.min, &best.compile.min))
         .then_with(|| compare_stats(&current.build.min, &best.build.min))
@@ -200,4 +249,12 @@ fn compare_stats(current: &TimingStats, best: &TimingStats) -> std::cmp::Orderin
         .avg_ns
         .partial_cmp(&best.avg_ns)
         .unwrap_or(std::cmp::Ordering::Equal)
+}
+
+fn effective_median(summary: &crate::model::PhaseSummary) -> &TimingStats {
+    if summary.median.avg_ns > 0.0 {
+        &summary.median
+    } else {
+        &summary.mean
+    }
 }
