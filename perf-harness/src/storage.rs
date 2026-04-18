@@ -79,6 +79,23 @@ pub fn next_output_path(input_path: &Path) -> io::Result<(PathBuf, Option<PathBu
     }
 }
 
+pub fn best_output_path(input_path: &Path) -> io::Result<PathBuf> {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let output_dir = manifest_dir.join(OUTPUT_DIR);
+    fs::create_dir_all(&output_dir)?;
+
+    let stem = input_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| invalid_case_file(input_path, "input file must have a valid stem"))?;
+    let ext = input_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("toml");
+
+    Ok(output_dir.join(format!("{stem}_best.{ext}")))
+}
+
 pub fn invalid_case_file(path: &Path, detail: &str) -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidData,

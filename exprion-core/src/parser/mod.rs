@@ -14,10 +14,10 @@ impl Parser {
     }
 }
 
-fn infix_right_precedence(operation: Symbol) -> Precedence {
+fn infix_right_precedence(operation: &Symbol) -> Precedence {
     match operation {
-        Symbol::Binary(Binary::Power) => get_precedence(&operation),
-        Symbol::Binary(_) | Symbol::Relation(_) => match get_precedence(&operation) {
+        Symbol::Binary(Binary::Power) => get_precedence(operation),
+        Symbol::Binary(_) | Symbol::Relation(_) => match get_precedence(operation) {
             Precedence::TERNARY => Precedence::Conditional,
             Precedence::Conditional => Precedence::LogicOr,
             Precedence::LogicOr => Precedence::LogicAnd,
@@ -29,7 +29,7 @@ fn infix_right_precedence(operation: Symbol) -> Precedence {
             Precedence::Power => Precedence::Unary,
             Precedence::Unary | Precedence::Lowest => Precedence::Unary,
         },
-        _ => get_precedence(&operation),
+        _ => get_precedence(operation),
     }
 }
 
@@ -61,9 +61,9 @@ fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
 
     // led
     loop {
-        let operation = match lexer.peek_token() {
-            Some(Token::Symbol(Symbol::Other(Other::RightParen))) => break,
-            Some(Token::Symbol(s @ (Symbol::Binary(_) | Symbol::Ternary(_) | Symbol::Relation(_)))) => s,
+        let operation = match lexer.peek_symbol() {
+            Some(Symbol::Other(Other::RightParen)) => break,
+            Some(s @ (Symbol::Binary(_) | Symbol::Ternary(_) | Symbol::Relation(_))) => s,
             None => break,
             _ => panic!("unexpected token, expected operator"),
         };
@@ -85,7 +85,7 @@ fn pratt_parsing(lexer: &mut Lexer, min_precedence: Precedence) -> Expression {
         }
 
         lexer.next_token(); // consume operator
-        let right = pratt_parsing(lexer, infix_right_precedence(operation));
+        let right = pratt_parsing(lexer, infix_right_precedence(&operation));
         left_expr = match operation {
             Symbol::Binary(_) => Expression::binary(left_expr, operation, right),
             Symbol::Relation(_) => Expression::relation(left_expr, operation, right),

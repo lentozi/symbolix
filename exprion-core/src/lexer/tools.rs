@@ -178,3 +178,14 @@ pub fn parse_token(input: &str) -> IResult<&str, Token> {
     )
     .parse(input)
 }
+
+pub fn parse_token_no_ws(input: &str) -> IResult<&str, Token> {
+    alt((
+        map(parse_boolean, |b| Token::constant(Constant::boolean(b))),
+        map(parse_variable, |v| Token::variable(v)),
+        map(parse_symbol, |s| Token::symbol(s)),
+        map(parse_float_token, |n| n),
+        map(parse_integer_token, |n| n),
+    ))
+    .parse(input)
+}

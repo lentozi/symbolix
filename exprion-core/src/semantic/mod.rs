@@ -12,7 +12,7 @@ use crate::parser::expression::Expression;
 use crate::semantic::semantic_ir::logic::LogicalExpression;
 use crate::semantic::semantic_ir::numeric::NumericExpression;
 use crate::semantic::semantic_ir::SemanticExpression;
-use crate::semantic::variable::{Variable, VariableType};
+use crate::semantic::variable::VariableType;
 use crate::with_compile_context;
 
 pub struct Analyzer {
@@ -42,53 +42,22 @@ impl Analyzer {
 fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression {
     match expr {
         Expression::BinaryExpression(left, operation, right) => match operation {
-            Symbol::Binary(Binary::Add) => {
-                let left = semantic_with_ctx(left, true);
-                let right = semantic_with_ctx(right, true);
-                left + right
-            }
+            Symbol::Binary(Binary::Add) => numeric_binary(left, right, SemanticExpression::addition),
             Symbol::Binary(Binary::Subtract) => {
-                let left = semantic_with_ctx(left, true);
-                let right = semantic_with_ctx(right, true);
-                left - right
+                numeric_binary(left, right, SemanticExpression::subtraction)
             }
             Symbol::Binary(Binary::Multiply) => {
-                let left = semantic_with_ctx(left, true);
-                let right = semantic_with_ctx(right, true);
-                left * right
+                numeric_binary(left, right, SemanticExpression::multiplication)
             }
             Symbol::Binary(Binary::Divide) => {
-                let left = semantic_with_ctx(left, true);
-                let right = semantic_with_ctx(right, true);
-                left / right
+                numeric_binary(left, right, SemanticExpression::division)
             }
-            Symbol::Binary(Binary::Power) => {
-                let left = semantic_with_ctx(left, true);
-                let right = semantic_with_ctx(right, true);
-                SemanticExpression::power(&left, &right)
-            }
+            Symbol::Binary(Binary::Power) => numeric_binary(left, right, SemanticExpression::power),
             Symbol::Binary(Binary::LogicAnd) => {
-                let left = semantic_with_ctx(left, false);
-                let right = semantic_with_ctx(right, false);
-                left & right
+                logical_binary(left, right, SemanticExpression::and)
             }
-            Symbol::Binary(Binary::LogicOr) => {
-                let left = semantic_with_ctx(left, false);
-                let right = semantic_with_ctx(right, false);
-                left | right
-            }
-            Symbol::Relation(_) => {
-                let left = semantic_with_ctx(left, true);
-                let right = semantic_with_ctx(right, true);
-                match (left, right) {
-                    (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
-                        SemanticExpression::Logical(LogicalExpression::relation(
-                            &left, operation, &right,
-                        ))
-                    }
-                    _ => panic!("relation operator applied to non-numeric expressions"),
-                }
-            }
+            Symbol::Binary(Binary::LogicOr) => logical_binary(left, right, SemanticExpression::or),
+            Symbol::Relation(_) => relation_expression(left, operation, right),
             _ => panic!("invalid symbol"),
         },
         Expression::Constant(Constant::Number(ref n)) => {
@@ -100,21 +69,13 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
             SemanticExpression::Logical(LogicalExpression::constant(b))
         }
         Expression::Variable(v) => {
-
-
-            // 判断上下文中是否已经注册
-            let variable = match with_compile_context!(ctx, ctx.search_variable(v)) {
-                Some(variable) => variable,
-                None => {
-                    let var_type: VariableType = if is_numeric {
-                        // TODO 暂时将数值计算中缺少类型声明的变量声明为 f64
-                        VariableType::Float
-                    } else {
-                        VariableType::Boolean
-                    };
-                    Variable::new(v.as_str(), var_type, None)
-                }
+            let var_type: VariableType = if is_numeric {
+                // TODO 暂时将数值计算中缺少类型声明的变量声明为 f64
+                VariableType::Float
+            } else {
+                VariableType::Boolean
             };
+            let variable = with_compile_context!(ctx, ctx.resolve_variable(v, var_type));
 
             if is_numeric {
                 SemanticExpression::Numeric(NumericExpression::variable(variable))
@@ -150,33 +111,61 @@ fn semantic_with_ctx(expr: &Expression, is_numeric: bool) -> SemanticExpression 
         }
         Expression::UnaryExpression(symbol, expression) => match symbol {
             Symbol::Unary(Unary::Plus) => semantic_with_ctx(expression, true),
-            Symbol::Unary(Unary::Minus) => {
-                let expr_semantic = semantic_with_ctx(expression, true);
-                match expr_semantic {
-                    SemanticExpression::Numeric(n) => SemanticExpression::Numeric(-n),
-                    _ => panic!("invalid unary expression"),
-                }
-            }
-            Symbol::Unary(Unary::LogicNot) => {
-                let expr_semantic = semantic_with_ctx(expression, false);
-                match expr_semantic {
-                    SemanticExpression::Logical(b) => SemanticExpression::Logical(!b),
-                    _ => panic!("invalid unary expression"),
-                }
-            }
+            Symbol::Unary(Unary::Minus) => numeric_unary(expression, SemanticExpression::negation),
+            Symbol::Unary(Unary::LogicNot) => logical_unary(expression, SemanticExpression::not),
             _ => panic!("unexpected unary operator: {}", symbol),
         },
-        Expression::Relation(left, relation, right) => {
-            let left = semantic_with_ctx(left, true);
-            let right = semantic_with_ctx(right, true);
-            match (left, right) {
-                (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
-                    SemanticExpression::Logical(LogicalExpression::relation(
-                        &left, relation, &right,
-                    ))
-                }
-                _ => panic!("relation operator applied to non-numeric expressions"),
-            }
+        Expression::Relation(left, relation, right) => relation_expression(left, relation, right),
+    }
+}
+
+fn numeric_binary(
+    left: &Expression,
+    right: &Expression,
+    op: fn(&SemanticExpression, &SemanticExpression) -> SemanticExpression,
+) -> SemanticExpression {
+    let left = semantic_with_ctx(left, true);
+    let right = semantic_with_ctx(right, true);
+    op(&left, &right)
+}
+
+fn logical_binary(
+    left: &Expression,
+    right: &Expression,
+    op: fn(&SemanticExpression, &SemanticExpression) -> SemanticExpression,
+) -> SemanticExpression {
+    let left = semantic_with_ctx(left, false);
+    let right = semantic_with_ctx(right, false);
+    op(&left, &right)
+}
+
+fn numeric_unary(
+    expr: &Expression,
+    op: fn(&SemanticExpression) -> SemanticExpression,
+) -> SemanticExpression {
+    let value = semantic_with_ctx(expr, true);
+    op(&value)
+}
+
+fn logical_unary(
+    expr: &Expression,
+    op: fn(&SemanticExpression) -> SemanticExpression,
+) -> SemanticExpression {
+    let value = semantic_with_ctx(expr, false);
+    op(&value)
+}
+
+fn relation_expression(
+    left: &Expression,
+    relation: &Symbol,
+    right: &Expression,
+) -> SemanticExpression {
+    let left = semantic_with_ctx(left, true);
+    let right = semantic_with_ctx(right, true);
+    match (left, right) {
+        (SemanticExpression::Numeric(left), SemanticExpression::Numeric(right)) => {
+            SemanticExpression::Logical(LogicalExpression::relation(&left, relation, &right))
         }
+        _ => panic!("relation operator applied to non-numeric expressions"),
     }
 }

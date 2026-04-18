@@ -7,7 +7,7 @@ pub enum Expression {
     // 常量表达式
     Constant(Constant),
     // 变量表达式
-    Variable(String),
+    Variable(Box<str>),
     // 一元表达式
     UnaryExpression(Symbol, Box<Expression>),
     // 二元表达式
@@ -24,6 +24,10 @@ impl Expression {
     }
 
     pub fn variable(variable: String) -> Expression {
+        Expression::Variable(variable.into_boxed_str())
+    }
+
+    pub fn variable_boxed(variable: Box<str>) -> Expression {
         Expression::Variable(variable)
     }
 

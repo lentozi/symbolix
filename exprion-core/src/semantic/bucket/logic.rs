@@ -57,6 +57,24 @@ impl LogicalBucket {
         self.expressions.append(&mut other.expressions);
     }
 
+    pub fn push_front(&mut self, expr: LogicalExpression) {
+        match expr {
+            LogicalExpression::Constant(c) => self.constants.insert(0, c),
+            LogicalExpression::Variable(v) => self.variables.insert(0, v),
+            expr => self.expressions.insert(0, expr),
+        }
+    }
+
+    pub fn with_appended(mut self, expr: LogicalExpression) -> Self {
+        self.push(expr);
+        self
+    }
+
+    pub fn with_prepended(mut self, expr: LogicalExpression) -> Self {
+        self.push_front(expr);
+        self
+    }
+
     pub fn execute_constant(&mut self, op_and: bool) {
         if self.constants.len() <= 1 {
             return;

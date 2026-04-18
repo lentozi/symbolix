@@ -84,6 +84,21 @@ impl CompileContext {
         self.symbol_table.borrow().get(variable_name).cloned()
     }
 
+    pub fn resolve_variable(&self, variable_name: &str, var_type: VariableType) -> Variable {
+        let mut table = self.symbol_table.borrow_mut();
+        if let Some(existing) = table.get(variable_name) {
+            return existing.clone();
+        }
+
+        let variable = Variable {
+            name: variable_name.to_string(),
+            var_type,
+            value: None,
+        };
+        table.define(variable.clone());
+        variable
+    }
+
     pub fn collect_variables(&self) -> Vec<Variable> {
         let table = self.symbol_table.borrow();
         table.collect()

@@ -80,6 +80,24 @@ impl NumericBucket {
         self.expressions.append(&mut other.expressions);
     }
 
+    pub fn push_front(&mut self, expr: NumericExpression) {
+        match expr {
+            NumericExpression::Constant(c) => self.constants.insert(0, c),
+            NumericExpression::Variable(v) => self.variables.insert(0, v),
+            expr => self.expressions.insert(0, expr),
+        }
+    }
+
+    pub fn with_appended(mut self, expr: NumericExpression) -> Self {
+        self.push(expr);
+        self
+    }
+
+    pub fn with_prepended(mut self, expr: NumericExpression) -> Self {
+        self.push_front(expr);
+        self
+    }
+
     pub fn execute_constant(&mut self, add: bool) {
         if self.constants.len() <= 1 {
             return;

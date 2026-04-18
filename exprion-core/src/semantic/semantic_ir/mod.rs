@@ -39,99 +39,77 @@ impl SemanticExpression {
         SemanticExpression::Logical(expr)
     }
 
-    pub fn negation(expr: &SemanticExpression) -> SemanticExpression {
-        match expr {
-            SemanticExpression::Numeric(n) => SemanticExpression::numeric(-n),
-            _ => panic!("negation is only defined for numeric expressions"),
+    pub fn as_numeric(&self) -> &NumericExpression {
+        match self {
+            SemanticExpression::Numeric(expr) => expr,
+            SemanticExpression::Logical(_) => {
+                panic!("expected numeric expression")
+            }
         }
     }
 
-    pub fn addition(term1: &SemanticExpression, term2: &SemanticExpression) -> SemanticExpression {
-        match (term1, term2) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(n1 + n2)
+    pub fn as_logical(&self) -> &LogicalExpression {
+        match self {
+            SemanticExpression::Logical(expr) => expr,
+            SemanticExpression::Numeric(_) => {
+                panic!("expected logical expression")
             }
-            _ => panic!("addition is only defined for numeric expressions"),
         }
+    }
+
+    pub fn negation(expr: &SemanticExpression) -> SemanticExpression {
+        SemanticExpression::numeric(-expr.as_numeric())
+    }
+
+    pub fn addition(term1: &SemanticExpression, term2: &SemanticExpression) -> SemanticExpression {
+        SemanticExpression::numeric(term1.as_numeric() + term2.as_numeric())
     }
 
     pub fn subtraction(
         minuend: &SemanticExpression,
         subtrahend: &SemanticExpression,
     ) -> SemanticExpression {
-        match (minuend, subtrahend) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(n1 - n2)
-            }
-            _ => panic!("subtraction is only defined for numeric expressions"),
-        }
+        SemanticExpression::numeric(minuend.as_numeric() - subtrahend.as_numeric())
     }
 
     pub fn multiplication(
         factor1: &SemanticExpression,
         factor2: &SemanticExpression,
     ) -> SemanticExpression {
-        match (factor1, factor2) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(n1 * n2)
-            }
-            _ => panic!("multiplication is only defined for numeric expressions"),
-        }
+        SemanticExpression::numeric(factor1.as_numeric() * factor2.as_numeric())
     }
 
     pub fn division(
         dividend: &SemanticExpression,
         divisor: &SemanticExpression,
     ) -> SemanticExpression {
-        match (dividend, divisor) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(n1 / n2)
-            }
-            _ => panic!("division is only defined for numeric expressions"),
-        }
+        SemanticExpression::numeric(dividend.as_numeric() / divisor.as_numeric())
     }
 
     pub fn power(base: &SemanticExpression, exponent: &SemanticExpression) -> SemanticExpression {
-        match (base, exponent) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::power(n1, n2))
-            }
-            _ => panic!("power is only defined for numeric expressions"),
-        }
+        SemanticExpression::numeric(NumericExpression::power(
+            base.as_numeric(),
+            exponent.as_numeric(),
+        ))
     }
 
     pub fn pow(&self, exponent: &SemanticExpression) -> SemanticExpression {
-        match (self, exponent) {
-            (SemanticExpression::Numeric(n1), SemanticExpression::Numeric(n2)) => {
-                SemanticExpression::numeric(NumericExpression::power(n1, n2))
-            }
-            _ => panic!("power is only defined for numeric expressions"),
-        }
+        SemanticExpression::numeric(NumericExpression::power(
+            self.as_numeric(),
+            exponent.as_numeric(),
+        ))
     }
 
     pub fn not(expr: &SemanticExpression) -> SemanticExpression {
-        match expr {
-            SemanticExpression::Logical(l) => SemanticExpression::logical(!l),
-            _ => panic!("not is only defined for logical expressions"),
-        }
+        SemanticExpression::logical(!expr.as_logical())
     }
 
     pub fn and(expr1: &SemanticExpression, expr2: &SemanticExpression) -> SemanticExpression {
-        match (expr1, expr2) {
-            (SemanticExpression::Logical(l1), SemanticExpression::Logical(l2)) => {
-                SemanticExpression::logical(l1 & l2)
-            }
-            _ => panic!("and is only defined for logical expressions"),
-        }
+        SemanticExpression::logical(expr1.as_logical() & expr2.as_logical())
     }
 
     pub fn or(expr1: &SemanticExpression, expr2: &SemanticExpression) -> SemanticExpression {
-        match (expr1, expr2) {
-            (SemanticExpression::Logical(l1), SemanticExpression::Logical(l2)) => {
-                SemanticExpression::logical(l1 | l2)
-            }
-            _ => panic!("or is only defined for logical expressions"),
-        }
+        SemanticExpression::logical(expr1.as_logical() | expr2.as_logical())
     }
 
     pub fn one() -> SemanticExpression {
@@ -144,16 +122,18 @@ impl SemanticExpression {
         replacement: Option<&SemanticExpression>,
     ) -> SemanticExpression {
         match self {
-            SemanticExpression::Numeric(expr) => match replacement {
-                Some(SemanticExpression::Numeric(numeric)) => {
-                    SemanticExpression::numeric(expr.substitute(target, Some(numeric)))
-                }
-                Some(SemanticExpression::Logical(_)) if target.var_type != crate::semantic::variable::VariableType::Boolean => {
-                    panic!("cannot substitute a numeric variable with a logical expression")
-                }
-                Some(SemanticExpression::Logical(_)) => self.clone(),
-                None => SemanticExpression::numeric(expr.substitute(target, None)),
-            },
+            SemanticExpression::Numeric(expr) => {
+                let numeric_replacement = match replacement {
+                    Some(SemanticExpression::Numeric(numeric)) => Some(numeric),
+                    Some(SemanticExpression::Logical(_))
+                        if target.var_type != crate::semantic::variable::VariableType::Boolean =>
+                    {
+                        panic!("cannot substitute a numeric variable with a logical expression")
+                    }
+                    _ => None,
+                };
+                SemanticExpression::numeric(expr.substitute(target, numeric_replacement))
+            }
             SemanticExpression::Logical(expr) => {
                 SemanticExpression::logical(expr.substitute(target, replacement))
             }

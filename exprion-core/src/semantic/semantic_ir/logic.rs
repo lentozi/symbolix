@@ -36,7 +36,9 @@ impl LogicalExpression {
     pub fn not(expr: &LogicalExpression) -> LogicalExpression {
         match expr {
             LogicalExpression::Constant(c) => LogicalExpression::Constant(!c),
-            LogicalExpression::Variable(_) => LogicalExpression::Not(Box::new(expr.clone())),
+            LogicalExpression::Variable(variable) => {
+                LogicalExpression::Not(Box::new(LogicalExpression::Variable(variable.clone())))
+            }
             LogicalExpression::Not(inner) => *inner.clone(),
             LogicalExpression::And(v) => {
                 let mut negated_terms = LogicalBucket::new();
@@ -124,15 +126,11 @@ impl LogicalExpression {
             }
             // And + r
             (LogicalExpression::And(v), r) => {
-                let mut combined = v.clone();
-                combined.push(r.clone());
-                LogicalExpression::And(combined)
+                LogicalExpression::And(v.clone().with_appended(r.clone()))
             }
             // l + And
             (l, LogicalExpression::And(v)) => {
-                let mut combined = v.clone();
-                combined.push(l.clone());
-                LogicalExpression::And(combined)
+                LogicalExpression::And(v.clone().with_appended(l.clone()))
             }
             // fallback
             (l, r) => LogicalExpression::And(logical_bucket![l.clone(), r.clone()]),
@@ -155,15 +153,11 @@ impl LogicalExpression {
             }
             // Or + r
             (LogicalExpression::Or(v), r) => {
-                let mut combined = v.clone();
-                combined.push(r.clone());
-                LogicalExpression::Or(combined)
+                LogicalExpression::Or(v.clone().with_appended(r.clone()))
             }
             // l + Or
             (l, LogicalExpression::Or(v)) => {
-                let mut combined = v.clone();
-                combined.push(l.clone());
-                LogicalExpression::Or(combined)
+                LogicalExpression::Or(v.clone().with_appended(l.clone()))
             }
             (l, r) => LogicalExpression::Or(logical_bucket![l.clone(), r.clone()]),
         }
@@ -313,7 +307,7 @@ fn substitute_logical_bucket(
     }
 
     for variable in &bucket.variables {
-        let expr = LogicalExpression::Variable(variable.clone()).substitute(target, replacement);
+        let expr = substitute_logical_variable(variable, target, replacement);
         folded = Some(match folded {
             Some(acc) if and_mode => acc & expr,
             Some(acc) => acc | expr,
@@ -346,5 +340,25 @@ fn render_logical_bucket(bucket: &LogicalBucket) -> Vec<String> {
     rendered.extend(bucket.variables.iter().map(|variable| variable.to_string()));
     rendered.extend(bucket.expressions.iter().map(|expr| expr.to_string()));
     rendered
+}
+
+fn substitute_logical_variable(
+    variable: &Variable,
+    target: &Variable,
+    replacement: Option<&crate::semantic::semantic_ir::SemanticExpression>,
+) -> LogicalExpression {
+    if variable == target {
+        match replacement {
+            Some(crate::semantic::semantic_ir::SemanticExpression::Logical(logical)) => {
+                logical.clone()
+            }
+            Some(crate::semantic::semantic_ir::SemanticExpression::Numeric(_)) => {
+                panic!("cannot substitute a logical variable with a numeric expression")
+            }
+            None => LogicalExpression::Variable(variable.clone()),
+        }
+    } else {
+        LogicalExpression::Variable(variable.clone())
+    }
 }
 

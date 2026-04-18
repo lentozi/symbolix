@@ -46,7 +46,9 @@ impl NumericExpression {
     pub fn negation(expr: &NumericExpression) -> NumericExpression {
         match expr {
             NumericExpression::Constant(n) => NumericExpression::Constant(-n),
-            NumericExpression::Variable(_) => NumericExpression::Negation(Box::new(expr.clone())),
+            NumericExpression::Variable(variable) => {
+                NumericExpression::Negation(Box::new(NumericExpression::Variable(variable.clone())))
+            }
             NumericExpression::Negation(inner) => *inner.clone(),
             NumericExpression::Addition(v) => {
                 let mut negated_terms = NumericBucket::new();
@@ -96,7 +98,11 @@ impl NumericExpression {
                     otherwise: otherwise2,
                 },
             ) => {
-                let mut new_cases = Vec::new();
+                let mut new_cases = Vec::with_capacity(
+                    cases1.len() * cases2.len()
+                        + cases1.len()
+                        + otherwise1.as_ref().map(|_| cases2.len()).unwrap_or(0),
+                );
 
                 // 先算 otherwise × otherwise
                 let new_otherwise = match (otherwise1, otherwise2) {
@@ -173,9 +179,9 @@ impl NumericExpression {
                 NumericExpression::Addition(new_bucket)
             }
             (NumericExpression::Addition(v), NumericExpression::Constant(n)) => {
-                let mut combined = v.clone();
-                combined.constants.push(n.clone());
-                NumericExpression::Addition(combined)
+                NumericExpression::Addition(v.clone().with_appended(NumericExpression::Constant(
+                    n.clone(),
+                )))
             }
             (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
                 // 常量折叠
@@ -189,14 +195,10 @@ impl NumericExpression {
                 ])
             }
             (NumericExpression::Addition(v), r) => {
-                let mut new_bucket = v.clone();
-                new_bucket.push(r.clone());
-                NumericExpression::Addition(new_bucket)
+                NumericExpression::Addition(v.clone().with_appended(r.clone()))
             }
             (l, NumericExpression::Addition(v)) => {
-                let mut combined = v.clone();
-                combined.push(l.clone());
-                NumericExpression::Addition(combined)
+                NumericExpression::Addition(v.clone().with_appended(l.clone()))
             }
             (l, r) => NumericExpression::Addition(numeric_bucket![l.clone(), r.clone()]),
         }
@@ -225,7 +227,11 @@ impl NumericExpression {
                     otherwise: otherwise2,
                 },
             ) => {
-                let mut new_cases = Vec::new();
+                let mut new_cases = Vec::with_capacity(
+                    cases1.len() * cases2.len()
+                        + cases1.len()
+                        + otherwise1.as_ref().map(|_| cases2.len()).unwrap_or(0),
+                );
 
                 // 先计算 otherwise × otherwise（避免 moved value）
                 let new_otherwise = match (otherwise1.as_ref(), otherwise2.as_ref()) {
@@ -305,14 +311,12 @@ impl NumericExpression {
                 NumericExpression::Multiplication(new_bucket)
             }
             (NumericExpression::Multiplication(v), NumericExpression::Constant(n)) => {
-                let mut combined = v.clone();
-                combined.constants.push(n.clone());
-                NumericExpression::Multiplication(combined)
+                NumericExpression::Multiplication(v.clone().with_appended(
+                    NumericExpression::Constant(n.clone()),
+                ))
             }
             (NumericExpression::Multiplication(v), r) => {
-                let mut new_bucket = v.clone();
-                new_bucket.push(r.clone());
-                NumericExpression::Multiplication(new_bucket)
+                NumericExpression::Multiplication(v.clone().with_appended(r.clone()))
             }
             (NumericExpression::Constant(c1), NumericExpression::Constant(c2)) => {
                 // 常量折叠
@@ -325,9 +329,7 @@ impl NumericExpression {
                 ])
             }
             (l, NumericExpression::Multiplication(v)) => {
-                let mut combined = v.clone();
-                combined.push(l.clone());
-                NumericExpression::Multiplication(combined)
+                NumericExpression::Multiplication(v.clone().with_appended(l.clone()))
             }
             (l, r) => NumericExpression::Multiplication(numeric_bucket![l.clone(), r.clone()]),
         }
@@ -544,7 +546,7 @@ fn substitute_numeric_bucket(
     }
 
     for variable in &bucket.variables {
-        let expr = NumericExpression::Variable(variable.clone()).substitute(target, replacement);
+        let expr = substitute_numeric_variable(variable, target, replacement);
         folded = Some(match folded {
             Some(acc) if additive => acc + expr,
             Some(acc) => acc * expr,
@@ -577,5 +579,19 @@ fn render_numeric_bucket(bucket: &NumericBucket) -> Vec<String> {
     rendered.extend(bucket.variables.iter().map(|variable| variable.to_string()));
     rendered.extend(bucket.expressions.iter().map(|expr| expr.to_string()));
     rendered
+}
+
+fn substitute_numeric_variable(
+    variable: &crate::semantic::variable::Variable,
+    target: &crate::semantic::variable::Variable,
+    replacement: Option<&NumericExpression>,
+) -> NumericExpression {
+    if variable == target {
+        replacement
+            .cloned()
+            .unwrap_or_else(|| NumericExpression::Variable(variable.clone()))
+    } else {
+        NumericExpression::Variable(variable.clone())
+    }
 }
 
