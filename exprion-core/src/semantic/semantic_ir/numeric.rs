@@ -438,7 +438,7 @@ impl NumericExpression {
         match self {
             NumericExpression::Constant(_) => self.clone(),
             NumericExpression::Variable(variable) => {
-                if variable == target {
+                if variable.same_identity(target) {
                     replacement.cloned().unwrap_or_else(|| self.clone())
                 } else {
                     self.clone()
@@ -586,7 +586,7 @@ fn substitute_numeric_variable(
     target: &crate::semantic::variable::Variable,
     replacement: Option<&NumericExpression>,
 ) -> NumericExpression {
-    if variable == target {
+    if variable.same_identity(target) {
         replacement
             .cloned()
             .unwrap_or_else(|| NumericExpression::Variable(variable.clone()))

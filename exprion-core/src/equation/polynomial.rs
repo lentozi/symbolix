@@ -127,7 +127,7 @@ fn extract_polynomial(
     match expr {
         NumericExpression::Constant(_) => Some(vec![expr.clone()]),
         NumericExpression::Variable(variable) => {
-            if variable == target {
+            if variable.same_identity(target) {
                 let mut result = vec![NumericExpression::constant(Number::integer(0)); 2];
                 result[1] = NumericExpression::constant(Number::integer(1));
                 Some(result)

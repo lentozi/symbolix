@@ -67,7 +67,7 @@ fn extract_linear_parts(
     match expr {
         NumericExpression::Constant(_) => Some((zero(), expr.clone())),
         NumericExpression::Variable(variable) => {
-            if variable == target {
+            if variable.same_identity(target) {
                 Some((one(), zero()))
             } else {
                 Some((zero(), expr.clone()))

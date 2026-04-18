@@ -20,7 +20,7 @@ use crate::{
 };
 use piecewise::PiecewiseSolver;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt,
     panic::{catch_unwind, AssertUnwindSafe},
 };
@@ -363,7 +363,7 @@ pub(crate) fn is_zero(expr: &NumericExpression) -> bool {
 pub(crate) fn contains_target(expr: &NumericExpression, target: &Variable) -> bool {
     match expr {
         NumericExpression::Constant(_) => false,
-        NumericExpression::Variable(variable) => variable == target,
+        NumericExpression::Variable(variable) => variable.same_identity(target),
         NumericExpression::Negation(inner) => contains_target(inner, target),
         NumericExpression::Addition(bucket) | NumericExpression::Multiplication(bucket) => {
             bucket.iter().any(|expr| contains_target(&expr, target))
@@ -383,58 +383,74 @@ pub(crate) fn contains_target(expr: &NumericExpression, target: &Variable) -> bo
 /// 从 NumericExpression 中收集变量
 fn collect_numeric_variables(expr: &NumericExpression) -> Vec<Variable> {
     let mut variables = Vec::new();
-    collect_numeric_variables_inner(expr, &mut variables);
+    let mut seen_ids = HashSet::new();
+    let mut seen_names = HashSet::new();
+    collect_numeric_variables_inner(expr, &mut variables, &mut seen_ids, &mut seen_names);
     variables
 }
 
-fn collect_numeric_variables_inner(expr: &NumericExpression, variables: &mut Vec<Variable>) {
+fn collect_numeric_variables_inner(
+    expr: &NumericExpression,
+    variables: &mut Vec<Variable>,
+    seen_ids: &mut HashSet<crate::context::NameId>,
+    seen_names: &mut HashSet<String>,
+) {
     match expr {
         NumericExpression::Constant(_) => {}
         NumericExpression::Variable(variable) => {
-            if !variables.contains(variable) {
+            if remember_variable(variable, seen_ids, seen_names) {
                 variables.push(variable.clone());
             }
         }
-        NumericExpression::Negation(inner) => collect_numeric_variables_inner(inner, variables),
+        NumericExpression::Negation(inner) => {
+            collect_numeric_variables_inner(inner, variables, seen_ids, seen_names)
+        }
         NumericExpression::Addition(bucket) | NumericExpression::Multiplication(bucket) => {
             for expr in bucket.iter() {
-                collect_numeric_variables_inner(&expr, variables);
+                collect_numeric_variables_inner(&expr, variables, seen_ids, seen_names);
             }
         }
         NumericExpression::Power { base, exponent } => {
-            collect_numeric_variables_inner(base, variables);
-            collect_numeric_variables_inner(exponent, variables);
+            collect_numeric_variables_inner(base, variables, seen_ids, seen_names);
+            collect_numeric_variables_inner(exponent, variables, seen_ids, seen_names);
         }
         NumericExpression::Piecewise { cases, otherwise } => {
             for (condition, expr) in cases {
-                collect_logical_variables(condition, variables);
-                collect_numeric_variables_inner(expr, variables);
+                collect_logical_variables(condition, variables, seen_ids, seen_names);
+                collect_numeric_variables_inner(expr, variables, seen_ids, seen_names);
             }
             if let Some(expr) = otherwise {
-                collect_numeric_variables_inner(expr, variables);
+                collect_numeric_variables_inner(expr, variables, seen_ids, seen_names);
             }
         }
     }
 }
 
 /// 从 LogicalExpression 中收集变量
-fn collect_logical_variables(expr: &LogicalExpression, variables: &mut Vec<Variable>) {
+fn collect_logical_variables(
+    expr: &LogicalExpression,
+    variables: &mut Vec<Variable>,
+    seen_ids: &mut HashSet<crate::context::NameId>,
+    seen_names: &mut HashSet<String>,
+) {
     match expr {
         LogicalExpression::Constant(_) => {}
         LogicalExpression::Variable(variable) => {
-            if !variables.contains(variable) {
+            if remember_variable(variable, seen_ids, seen_names) {
                 variables.push(variable.clone());
             }
         }
-        LogicalExpression::Not(inner) => collect_logical_variables(inner, variables),
+        LogicalExpression::Not(inner) => {
+            collect_logical_variables(inner, variables, seen_ids, seen_names)
+        }
         LogicalExpression::And(bucket) | LogicalExpression::Or(bucket) => {
             for expr in bucket.iter() {
-                collect_logical_variables(&expr, variables);
+                collect_logical_variables(&expr, variables, seen_ids, seen_names);
             }
         }
         LogicalExpression::Relation { left, right, .. } => {
-            collect_numeric_variables_inner(left, variables);
-            collect_numeric_variables_inner(right, variables);
+            collect_numeric_variables_inner(left, variables, seen_ids, seen_names);
+            collect_numeric_variables_inner(right, variables, seen_ids, seen_names);
         }
     }
 }
@@ -557,6 +573,18 @@ fn dedup_solutions(solutions: Vec<NumericExpression>) -> Vec<NumericExpression> 
     deduped
 }
 
+fn remember_variable(
+    variable: &Variable,
+    seen_ids: &mut HashSet<crate::context::NameId>,
+    seen_names: &mut HashSet<String>,
+) -> bool {
+    if variable.name_id != 0 {
+        seen_ids.insert(variable.name_id)
+    } else {
+        seen_names.insert(variable.name.clone())
+    }
+}
+
 #[doc(hidden)]
 pub mod testing {
     use super::*;
@@ -575,7 +603,9 @@ pub mod testing {
 
     pub fn collect_logical_variables_public(expr: &LogicalExpression) -> Vec<Variable> {
         let mut variables = Vec::new();
-        collect_logical_variables(expr, &mut variables);
+        let mut seen_ids = HashSet::new();
+        let mut seen_names = HashSet::new();
+        collect_logical_variables(expr, &mut variables, &mut seen_ids, &mut seen_names);
         variables
     }
 

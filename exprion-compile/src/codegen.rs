@@ -461,6 +461,7 @@ mod tests {
 
     fn numeric_var(name: &str, ty: VariableType) -> Variable {
         Variable {
+            name_id: 0,
             name: name.to_string(),
             var_type: ty,
             value: None,

@@ -19,7 +19,7 @@ impl VariableStack {
         let mut stack = VariableStack {
             scopes: Vec::new(),
             names: HashMap::new(),
-            next_name_id: 0,
+            next_name_id: 1,
         };
         stack.push_scope();
         stack

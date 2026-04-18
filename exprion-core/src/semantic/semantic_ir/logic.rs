@@ -202,7 +202,7 @@ impl LogicalExpression {
         match self {
             LogicalExpression::Constant(_) => self.clone(),
             LogicalExpression::Variable(variable) => {
-                if variable == target {
+                if variable.same_identity(target) {
                     match replacement {
                         Some(crate::semantic::semantic_ir::SemanticExpression::Logical(
                             logical,
@@ -347,7 +347,7 @@ fn substitute_logical_variable(
     target: &Variable,
     replacement: Option<&crate::semantic::semantic_ir::SemanticExpression>,
 ) -> LogicalExpression {
-    if variable == target {
+    if variable.same_identity(target) {
         match replacement {
             Some(crate::semantic::semantic_ir::SemanticExpression::Logical(logical)) => {
                 logical.clone()

@@ -51,6 +51,7 @@ fn numeric_and_boolean_variables_convert_to_expected_expression_types() {
     ));
     assert!(matches!(
         Variable {
+            name_id: 0,
             name: "r".to_string(),
             var_type: VariableType::Fraction,
             value: None,
@@ -68,6 +69,7 @@ fn numeric_and_boolean_variables_convert_to_expected_expression_types() {
 fn unknown_variable_cannot_convert_to_expression() {
     let panic = catch_unwind(AssertUnwindSafe(|| {
         Variable {
+            name_id: 0,
             name: "mystery".to_string(),
             var_type: VariableType::Unknown,
             value: None,
@@ -82,6 +84,7 @@ fn numeric_operations_and_operator_impls_produce_numeric_expressions() {
     let x = numeric_var("x");
     let y = numeric_var("y");
     let frac = Variable {
+        name_id: 0,
         name: "q".to_string(),
         var_type: VariableType::Fraction,
         value: None,
@@ -145,6 +148,7 @@ fn invalid_variable_operations_panic() {
     let bool_var = boolean_var("flag");
     let num_var = numeric_var("x");
     let unknown = Variable {
+        name_id: 0,
         name: "u".to_string(),
         var_type: VariableType::Unknown,
         value: None,

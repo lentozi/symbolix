@@ -8,6 +8,7 @@ use crate::{
     impl_var_numeric_operation, impl_var_unary_operation, with_compile_context,
 };
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::{Add, BitAnd, BitOr, Div, Mul, Neg, Not, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -19,7 +20,7 @@ pub enum VariableType {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone)]
 pub struct Variable {
     pub name_id: NameId,
     pub name: String,
@@ -27,7 +28,41 @@ pub struct Variable {
     pub value: Option<Constant>,
 }
 
+impl PartialEq for Variable {
+    fn eq(&self, other: &Self) -> bool {
+        if self.name_id != 0 && other.name_id != 0 {
+            self.name_id == other.name_id
+        } else {
+            self.name == other.name
+                && self.var_type == other.var_type
+                && self.value == other.value
+        }
+    }
+}
+
+impl Eq for Variable {}
+
+impl Hash for Variable {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.name_id != 0 {
+            self.name_id.hash(state);
+        } else {
+            self.name.hash(state);
+            self.var_type.hash(state);
+            self.value.hash(state);
+        }
+    }
+}
+
 impl Variable {
+    pub fn same_identity(&self, other: &Variable) -> bool {
+        if self.name_id != 0 && other.name_id != 0 {
+            self.name_id == other.name_id
+        } else {
+            self == other
+        }
+    }
+
     fn to_numeric_expression(&self) -> NumericExpression {
         NumericExpression::variable(self.clone())
     }
