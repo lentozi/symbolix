@@ -1,0 +1,83 @@
+[[cases]]
+name = "string_default_build"
+kind = "string"
+mode = "build_only"
+expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0
+
+[[cases]]
+name = "string_default_compile"
+kind = "string"
+mode = "compile_only"
+expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0
+
+[[cases]]
+name = "string_default_execute"
+kind = "string"
+mode = "execute_only"
+expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0
+
+[[cases]]
+name = "string_pow_hot_build"
+kind = "string"
+mode = "build_only"
+expression = "((x + 1) ^ 2 + (y + 2) ^ 3 + (z + 3) ^ 4) / ((x + 4) ^ -1 + 1)"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0
+
+[[cases]]
+name = "string_pow_hot_compile"
+kind = "string"
+mode = "compile_only"
+expression = "((x + 1) ^ 2 + (y + 2) ^ 3 + (z + 3) ^ 4) / ((x + 4) ^ -1 + 1)"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0
+
+[[cases]]
+name = "string_pow_hot_execute"
+kind = "string"
+mode = "execute_only"
+expression = "((x + 1) ^ 2 + (y + 2) ^ 3 + (z + 3) ^ 4) / ((x + 4) ^ -1 + 1)"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0
+
+[[cases]]
+name = "string_piecewise_execute"
+kind = "string"
+mode = "execute_only"
+expression = "x > 0 ? x * 2 : -x"
+build_iters = 5000
+compile_iters = 500
+exec_iters = 200000
+warmup_iters = 200
+repeat = 7
+min_sample_ms = 300.0

@@ -19,6 +19,7 @@ name = "exprion-api"
 version = "0.1.0"
 dependencies = [
  "exprion-core",
+ "exprion-engine",
 ]
 
 [[package]]
