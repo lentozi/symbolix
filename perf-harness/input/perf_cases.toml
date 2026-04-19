@@ -1,6 +1,7 @@
 [[cases]]
 name = "api_default_expr"
 kind = "api_default"
+mode = "execute_only"
 expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
 build_iters = 20000
 compile_iters = 2000
@@ -11,7 +12,19 @@ repeat = 5
 [[cases]]
 name = "string_default_expr"
 kind = "string"
+mode = "execute_only"
 expression = "(((x + 1.25) ^ 2 + y * 3.5 - z / 7.0) * (x - y + 2.0)) / 3.0"
+build_iters = 20000
+compile_iters = 2000
+exec_iters = 1000000
+warmup_iters = 1000
+repeat = 5
+
+[[cases]]
+name = "string_pow_hot_expr"
+kind = "string"
+mode = "execute_only"
+expression = "((x + 1) ^ 2 + (y + 2) ^ 3 + (z + 3) ^ 4) / ((x + 4) ^ -1 + 1)"
 build_iters = 20000
 compile_iters = 2000
 exec_iters = 1000000

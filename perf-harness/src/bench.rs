@@ -9,55 +9,16 @@ use exprion_core::{
     parser::Parser,
     semantic::{semantic_ir::SemanticExpression, Analyzer},
 };
-use exprion_engine::jit_compile_numeric;
+use exprion_engine::{jit_compile_numeric, numeric_cache_stats, reset_numeric_cache_stats};
 
-use crate::model::{CaseKind, PerfCase, PerfResult, PhaseSummary, TimingStats};
+use crate::model::{BenchmarkMode, CacheStats, CaseKind, PerfCase, PerfResult, PhaseSummary, TimingStats};
 
 pub fn benchmark_case(case: &PerfCase) -> PerfResult {
-    let build = match case.kind {
-        CaseKind::ApiDefault => {
-            benchmark_build(
-                case.build_iters,
-                case.warmup_iters,
-                case.repeat,
-                case.min_sample_ms,
-                build_semantic_from_api,
-            )
-        }
-        CaseKind::String => benchmark_build(
-            case.build_iters,
-            case.warmup_iters,
-            case.repeat,
-            case.min_sample_ms,
-            || build_semantic_from_string(&case.expression),
-        ),
-    };
-
-    let semantic = match case.kind {
-        CaseKind::ApiDefault => build_semantic_from_api(),
-        CaseKind::String => build_semantic_from_string(&case.expression),
-    };
-
-    let compile = benchmark_compile(
-        case.compile_iters,
-        case.warmup_iters.min(case.compile_iters),
-        case.repeat,
-        case.min_sample_ms,
-        &semantic,
-    );
-    let (execute, checksum) = benchmark_execute(
-        case.exec_iters,
-        case.warmup_iters.min(case.exec_iters),
-        case.repeat,
-        case.min_sample_ms,
-        semantic,
-    );
-
-    PerfResult {
-        build,
-        compile,
-        execute,
-        checksum,
+    match case.mode {
+        BenchmarkMode::All => benchmark_all(case),
+        BenchmarkMode::ExecuteOnly => benchmark_execute_only(case),
+        BenchmarkMode::CompileOnly => benchmark_compile_only(case),
+        BenchmarkMode::BuildOnly => benchmark_build_only(case),
     }
 }
 
@@ -83,6 +44,108 @@ fn build_semantic_from_api() -> SemanticExpression {
         optimize(&mut semantic);
         semantic
     })
+}
+
+fn benchmark_all(case: &PerfCase) -> PerfResult {
+    reset_numeric_cache_stats();
+    let build = benchmark_case_build(case);
+    let semantic = build_case_semantic(case);
+    let compile = benchmark_compile(
+        case.compile_iters,
+        case.warmup_iters.min(case.compile_iters),
+        case.repeat,
+        case.min_sample_ms,
+        &semantic,
+    );
+    let (execute, checksum) = benchmark_execute(
+        case.exec_iters,
+        case.warmup_iters.min(case.exec_iters),
+        case.repeat,
+        case.min_sample_ms,
+        semantic,
+    );
+    PerfResult {
+        build,
+        compile,
+        execute,
+        checksum,
+        cache: convert_cache_stats(),
+    }
+}
+
+fn benchmark_execute_only(case: &PerfCase) -> PerfResult {
+    reset_numeric_cache_stats();
+    let semantic = build_case_semantic(case);
+    let (execute, checksum) = benchmark_execute(
+        case.exec_iters,
+        case.warmup_iters.min(case.exec_iters),
+        case.repeat,
+        case.min_sample_ms,
+        semantic,
+    );
+    PerfResult {
+        build: skipped_phase(),
+        compile: skipped_phase(),
+        execute,
+        checksum,
+        cache: convert_cache_stats(),
+    }
+}
+
+fn benchmark_compile_only(case: &PerfCase) -> PerfResult {
+    reset_numeric_cache_stats();
+    let semantic = build_case_semantic(case);
+    let compile = benchmark_compile(
+        case.compile_iters,
+        case.warmup_iters.min(case.compile_iters),
+        case.repeat,
+        case.min_sample_ms,
+        &semantic,
+    );
+    PerfResult {
+        build: skipped_phase(),
+        compile,
+        execute: skipped_phase(),
+        checksum: 0.0,
+        cache: convert_cache_stats(),
+    }
+}
+
+fn benchmark_build_only(case: &PerfCase) -> PerfResult {
+    reset_numeric_cache_stats();
+    PerfResult {
+        build: benchmark_case_build(case),
+        compile: skipped_phase(),
+        execute: skipped_phase(),
+        checksum: 0.0,
+        cache: convert_cache_stats(),
+    }
+}
+
+fn benchmark_case_build(case: &PerfCase) -> PhaseSummary {
+    match case.kind {
+        CaseKind::ApiDefault => benchmark_build(
+            case.build_iters,
+            case.warmup_iters,
+            case.repeat,
+            case.min_sample_ms,
+            build_semantic_from_api,
+        ),
+        CaseKind::String => benchmark_build(
+            case.build_iters,
+            case.warmup_iters,
+            case.repeat,
+            case.min_sample_ms,
+            || build_semantic_from_string(&case.expression),
+        ),
+    }
+}
+
+fn build_case_semantic(case: &PerfCase) -> SemanticExpression {
+    match case.kind {
+        CaseKind::ApiDefault => build_semantic_from_api(),
+        CaseKind::String => build_semantic_from_string(&case.expression),
+    }
 }
 
 fn benchmark_build<F>(
@@ -244,5 +307,24 @@ fn summarize_phase(samples: Vec<TimingStats>) -> PhaseSummary {
         min,
         max,
         jitter_pct,
+    }
+}
+
+fn skipped_phase() -> PhaseSummary {
+    PhaseSummary {
+        samples: 0,
+        mean: TimingStats::default(),
+        median: TimingStats::default(),
+        min: TimingStats::default(),
+        max: TimingStats::default(),
+        jitter_pct: 0.0,
+    }
+}
+
+fn convert_cache_stats() -> CacheStats {
+    let stats = numeric_cache_stats();
+    CacheStats {
+        hits: stats.hits,
+        misses: stats.misses,
     }
 }

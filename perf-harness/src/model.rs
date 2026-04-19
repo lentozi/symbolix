@@ -19,6 +19,8 @@ pub struct PerfCase {
     pub name: String,
     pub kind: CaseKind,
     pub expression: String,
+    #[serde(default = "default_mode")]
+    pub mode: BenchmarkMode,
     #[serde(default = "default_build_iters")]
     pub build_iters: usize,
     #[serde(default = "default_compile_iters")]
@@ -42,12 +44,23 @@ pub enum CaseKind {
     String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BenchmarkMode {
+    All,
+    ExecuteOnly,
+    CompileOnly,
+    BuildOnly,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PerfResult {
     pub build: PhaseSummary,
     pub compile: PhaseSummary,
     pub execute: PhaseSummary,
     pub checksum: f64,
+    #[serde(default)]
+    pub cache: CacheStats,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,8 +98,18 @@ pub struct PhaseSummary {
     pub jitter_pct: f64,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct CacheStats {
+    pub hits: usize,
+    pub misses: usize,
+}
+
 pub fn default_build_iters() -> usize {
     DEFAULT_BUILD_ITERS
+}
+
+pub fn default_mode() -> BenchmarkMode {
+    BenchmarkMode::All
 }
 
 pub fn default_compile_iters() -> usize {
@@ -114,6 +137,17 @@ impl CaseKind {
         match self {
             CaseKind::ApiDefault => "api_default",
             CaseKind::String => "string",
+        }
+    }
+}
+
+impl BenchmarkMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BenchmarkMode::All => "all",
+            BenchmarkMode::ExecuteOnly => "execute_only",
+            BenchmarkMode::CompileOnly => "compile_only",
+            BenchmarkMode::BuildOnly => "build_only",
         }
     }
 }
@@ -148,6 +182,7 @@ impl PerfResultCompat {
                     jitter_pct: 0.0,
                 },
                 checksum: result.checksum,
+                cache: CacheStats::default(),
             },
         }
     }
@@ -160,6 +195,7 @@ pub fn default_case_file() -> CaseFile {
                 name: "api_default_expr".to_string(),
                 kind: CaseKind::ApiDefault,
                 expression: DEFAULT_API_EXPR.to_string(),
+                mode: BenchmarkMode::All,
                 build_iters: DEFAULT_BUILD_ITERS,
                 compile_iters: DEFAULT_COMPILE_ITERS,
                 exec_iters: DEFAULT_EXEC_ITERS,
@@ -172,6 +208,7 @@ pub fn default_case_file() -> CaseFile {
                 name: "string_default_expr".to_string(),
                 kind: CaseKind::String,
                 expression: DEFAULT_API_EXPR.to_string(),
+                mode: BenchmarkMode::All,
                 build_iters: DEFAULT_BUILD_ITERS,
                 compile_iters: DEFAULT_COMPILE_ITERS,
                 exec_iters: DEFAULT_EXEC_ITERS,

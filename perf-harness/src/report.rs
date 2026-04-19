@@ -4,7 +4,7 @@ use crate::model::{CaseFile, PerfCase, PerfResult, PerfResultCompat, TimingStats
 
 pub fn print_case(case: &PerfCase, result: &PerfResult) {
     println!("{}", case.name);
-    println!("  kind: {}", case.kind.as_str());
+    println!("  kind: {}  mode: {}", case.kind.as_str(), case.mode.as_str());
     println!(
         "  config: warmup={} repeat={} build_iters={} compile_iters={} exec_iters={}",
         case.warmup_iters, case.repeat, case.build_iters, case.compile_iters, case.exec_iters
@@ -48,6 +48,10 @@ pub fn print_case(case: &PerfCase, result: &PerfResult) {
     println!(
         "  jitter: build {:.1}%, compile {:.1}%, execute {:.1}%",
         result.build.jitter_pct, result.compile.jitter_pct, result.execute.jitter_pct
+    );
+    println!(
+        "  cache: hits {}, misses {}",
+        result.cache.hits, result.cache.misses
     );
     println!("  checksum: {:.6}", result.checksum);
 }
@@ -232,12 +236,12 @@ fn print_delta(label: &str, previous: f64, current: f64) {
 }
 
 fn is_better_result(current: &PerfResult, best: &PerfResult) -> bool {
-    compare_stats(effective_median(&current.execute), effective_median(&best.execute))
+    compare_optional_phase(&current.execute, &best.execute)
         .then_with(|| compare_stats(&current.execute.mean, &best.execute.mean))
         .then_with(|| compare_stats(&current.execute.min, &best.execute.min))
-        .then_with(|| compare_stats(effective_median(&current.compile), effective_median(&best.compile)))
+        .then_with(|| compare_optional_phase(&current.compile, &best.compile))
         .then_with(|| compare_stats(&current.compile.mean, &best.compile.mean))
-        .then_with(|| compare_stats(effective_median(&current.build), effective_median(&best.build)))
+        .then_with(|| compare_optional_phase(&current.build, &best.build))
         .then_with(|| compare_stats(&current.build.mean, &best.build.mean))
         .then_with(|| compare_stats(&current.compile.min, &best.compile.min))
         .then_with(|| compare_stats(&current.build.min, &best.build.min))
@@ -256,5 +260,17 @@ fn effective_median(summary: &crate::model::PhaseSummary) -> &TimingStats {
         &summary.median
     } else {
         &summary.mean
+    }
+}
+
+fn compare_optional_phase(
+    current: &crate::model::PhaseSummary,
+    best: &crate::model::PhaseSummary,
+) -> std::cmp::Ordering {
+    match (current.samples == 0, best.samples == 0) {
+        (true, true) => std::cmp::Ordering::Equal,
+        (true, false) => std::cmp::Ordering::Equal,
+        (false, true) => std::cmp::Ordering::Less,
+        (false, false) => compare_stats(effective_median(current), effective_median(best)),
     }
 }
