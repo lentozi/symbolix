@@ -41,9 +41,11 @@
   - 当前将 `exprion-core` 产出的数值语义 IR 降到 LLVM IR，再交给 LLVM MCJIT 执行
   - 内部已拆分为 `lowering` 和 `backend` 两层，`backend` 目前通过 trait 接 MCJIT，方便后续切换到 ORC JIT
 - `examples/`
-  - 顶层示例，演示如何直接使用编译期宏
+  - 顶层示例，演示如何通过 `exprion` facade 使用公开能力
 - `src/lib.rs`
-  - 顶层 crate 目前仅作为 workspace 入口，没有额外公开 API
+  - 顶层 facade crate
+  - 默认导出 `exprion-api` 的高层能力、编译期宏，以及少量 JIT 能力
+  - 底层 crate 通过 `exprion::advanced::{core, engine}` 暴露给高级使用者
 - `documents/`
   - 项目文档或设计资料
 
@@ -89,6 +91,7 @@ cargo test -p exprion-api
 cargo test -p exprion-engine
 
 cargo run --example workspace_demo
+cargo run --example facade
 ```
 
 ## JIT 方向
@@ -99,7 +102,40 @@ cargo run --example workspace_demo
 - `exprion-engine` 负责把优化后的语义 IR 降到 LLVM IR 并执行
 - `exprion-compile` 继续保留为编译期宏能力，但它不是 JIT
 
-`exprion-engine` 当前推荐的最小用法：
+面向普通使用者时，当前更推荐直接从顶层 `exprion` crate 开始；需要底层能力时，再进入 `exprion::advanced`。
+
+顶层 facade 的一个最小 JIT 用法：
+
+```rust
+use exprion::{
+    advanced::core::{
+        lexer::Lexer,
+        new_compile_context,
+        optimizer::optimize,
+        parser::Parser,
+        semantic::Analyzer,
+    },
+    compile_numeric,
+};
+
+fn main() {
+    let semantic = new_compile_context! {
+        let mut lexer = Lexer::new("z + x * 2 + 1");
+        let parsed = Parser::pratt(&mut lexer);
+        let mut analyzer = Analyzer::new();
+        let mut semantic = analyzer.analyze_with_ctx(&parsed);
+        optimize(&mut semantic);
+        semantic
+    };
+    let compiled = compile_numeric(semantic.into()).unwrap();
+
+    let result = compiled.calculate(&[3.0, 10.0]).unwrap();
+    assert_eq!(compiled.variables(), vec!["x".to_string(), "z".to_string()]);
+    assert!((result - 17.0).abs() < 1e-9);
+}
+```
+
+若你正在构建底层流水线，也可以直接使用 `exprion-core` 和 `exprion-engine`：
 
 ```rust
 use exprion_core::{
@@ -141,14 +177,12 @@ fn main() {
 - 依赖本机可用的 LLVM 安装和 `llvm-config`
 - 当前不支持布尔变量参数的 JIT；逻辑表达式目前支持基于数值关系的逻辑组合
 
-## 使用 `exprion-core`
+## 使用 `exprion`
 
-## 使用 `exprion-api`
-
-`exprion-api` 适合把表达式、变量和常量之间的组合规则包装成更直接的开发接口，而不是让使用者直接操作 `lexer / parser / semantic` 这些底层模块。
+顶层 `exprion` 是推荐的默认入口，适合大多数库使用者。
 
 ```rust
-use exprion_api::{scope, Var};
+use exprion::{scope, Var};
 
 fn main() {
     scope(|| {
@@ -160,6 +194,16 @@ fn main() {
     });
 }
 ```
+
+其中：
+
+- `Expr`、`Var`、`Equation`、`scope` 等高层能力来自 facade
+- `formula!` 和 `exprion!` 也可以直接从 `exprion` 导入
+- 只有在你明确需要 lexer、parser、semantic 这些底层组件时，才建议进入 `exprion::advanced`
+
+## 使用 `exprion::advanced::core`
+
+当你需要手动控制词法分析、语法分析、语义分析和优化流程时，可以走底层入口。
 
 下面的示例展示了从字符串表达式到语义 IR 的基本流程：
 
@@ -194,7 +238,7 @@ fn main() {
 
 ## 求解单变量一次方程
 
-`exprion-core` 当前提供单变量一次方程求解能力：
+`exprion::advanced::core` 当前提供单变量一次方程求解能力：
 
 ```rust
 use exprion_core::{
@@ -237,7 +281,7 @@ fn main() {
 示例：
 
 ```rust
-use exprion_compile::formula;
+use exprion::formula;
 
 fn main() {
     let formula = formula!("y + x * 2");
@@ -263,7 +307,7 @@ fn main() {
 示例：
 
 ```rust
-use exprion_compile::exprion;
+use exprion::exprion;
 
 fn main() {
     let code = exprion! {
@@ -304,6 +348,8 @@ fn main() {
   - 演示 `formula!`
 - `exprion-compile/examples/rust_analyse.rs`
   - 演示 `exprion!`
+- `examples/facade.rs`
+  - 演示通过顶层 `exprion` facade 使用变量、关系、方程和 JIT
 - `examples/workspace_demo.rs`
   - 顶层入口示例
 

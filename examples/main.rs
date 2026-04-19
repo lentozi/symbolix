@@ -1,4 +1,4 @@
-use exprion_compile::formula;
+use exprion::formula;
 
 fn main() {
     let code = formula!("-x + y + 123 + 45.67 * ((89 - 0.1) ^ x) ^ x + 0");
