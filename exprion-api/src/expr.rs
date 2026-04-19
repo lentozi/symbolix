@@ -3,7 +3,11 @@ use exprion_core::{
     semantic::semantic_ir::{logic::LogicalExpression, numeric::NumericExpression, SemanticExpression},
 };
 
-use crate::IntoExpr;
+use crate::{
+    equation::{Equation, SolutionSet, SolveError},
+    jit::{JitError, JitFunction},
+    IntoExpr, Var,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expr(pub(crate) SemanticExpression);
@@ -53,6 +57,36 @@ impl Expr {
             SemanticExpression::Logical(expr) => expr,
             SemanticExpression::Numeric(_) => panic!("expected logical expression"),
         }
+    }
+
+    pub fn equation(&self) -> Result<Equation, SolveError> {
+        Equation::infer(self.clone())
+    }
+
+    pub fn equation_for(&self, solve_for: &Var) -> Result<Equation, SolveError> {
+        Equation::new(self.clone(), solve_for)
+    }
+
+    pub fn solve(&self) -> Result<SolutionSet, SolveError> {
+        self.equation()?.solve()
+    }
+
+    pub fn solve_for(&self, solve_for: &Var) -> Result<SolutionSet, SolveError> {
+        self.equation_for(solve_for)?.solve()
+    }
+
+    pub fn solve_unique(&self) -> Result<Self, SolveError> {
+        self.equation()?.solve_unique()
+    }
+
+    pub fn solve_unique_for(&self, solve_for: &Var) -> Result<Self, SolveError> {
+        self.equation_for(solve_for)?.solve_unique()
+    }
+
+    pub fn jit_compile(&self) -> Result<JitFunction, JitError> {
+        Ok(JitFunction(exprion_engine::jit_compile_numeric(
+            self.clone().into_semantic(),
+        )?))
     }
 
     pub fn pow<T: IntoExpr>(&self, rhs: T) -> Self {
