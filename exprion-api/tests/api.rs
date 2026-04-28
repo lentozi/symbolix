@@ -17,6 +17,20 @@ fn api_normalizes_variable_and_expression_arithmetic() {
 }
 
 #[test]
+fn api_supports_left_scalar_arithmetic_with_var() {
+    scope(|| {
+        let x = Var::number("x");
+
+        let expr = 2.0 * &x + 1.0;
+        let rendered = expr.semantic().to_string();
+
+        assert!(expr.semantic().is_numeric());
+        assert!(rendered.contains("x"));
+        assert!(rendered.contains("2"));
+    });
+}
+
+#[test]
 fn api_supports_relations_boolean_ops_and_pow() {
     scope(|| {
         let x = Var::number("x");
