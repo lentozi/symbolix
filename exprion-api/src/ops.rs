@@ -47,65 +47,133 @@ impl_binary_expr_op!(Div, div, /);
 impl_binary_expr_op!(BitAnd, bitand, &);
 impl_binary_expr_op!(BitOr, bitor, |);
 
-macro_rules! impl_scalar_left_expr_op {
-    ($lhs:ty, $ctor:ident, $cast:expr, $trait:ident, $method:ident) => {
-        impl $trait<Var> for $lhs {
-            type Output = Expr;
+impl Add<Var> for f64 {
+    type Output = Expr;
 
-            fn $method(self, rhs: Var) -> Self::Output {
-                let lhs_expr = Expr::$ctor($cast);
-                lhs_expr.$method(rhs)
-            }
-        }
-
-        impl $trait<&Var> for $lhs {
-            type Output = Expr;
-
-            fn $method(self, rhs: &Var) -> Self::Output {
-                let lhs_expr = Expr::$ctor($cast);
-                lhs_expr.$method(rhs)
-            }
-        }
-
-        impl $trait<Expr> for $lhs {
-            type Output = Expr;
-
-            fn $method(self, rhs: Expr) -> Self::Output {
-                let lhs_expr = Expr::$ctor($cast);
-                lhs_expr.$method(rhs)
-            }
-        }
-
-        impl $trait<&Expr> for $lhs {
-            type Output = Expr;
-
-            fn $method(self, rhs: &Expr) -> Self::Output {
-                let lhs_expr = Expr::$ctor($cast);
-                lhs_expr.$method(rhs)
-            }
-        }
-    };
+    fn add(self, rhs: Var) -> Self::Output {
+        Expr::float(self).add(rhs)
+    }
 }
 
-impl_scalar_left_expr_op!(f64, float, self, Add, add);
-impl_scalar_left_expr_op!(f64, float, self, Sub, sub);
-impl_scalar_left_expr_op!(f64, float, self, Mul, mul);
-impl_scalar_left_expr_op!(f64, float, self, Div, div);
+impl Add<&Var> for f64 {
+    type Output = Expr;
 
-impl_scalar_left_expr_op!(f32, float, self as f64, Add, add);
-impl_scalar_left_expr_op!(f32, float, self as f64, Sub, sub);
-impl_scalar_left_expr_op!(f32, float, self as f64, Mul, mul);
-impl_scalar_left_expr_op!(f32, float, self as f64, Div, div);
+    fn add(self, rhs: &Var) -> Self::Output {
+        Expr::float(self).add(rhs)
+    }
+}
 
-impl_scalar_left_expr_op!(i64, float, self as f64, Add, add);
-impl_scalar_left_expr_op!(i64, float, self as f64, Sub, sub);
-impl_scalar_left_expr_op!(i64, float, self as f64, Mul, mul);
-impl_scalar_left_expr_op!(i64, float, self as f64, Div, div);
+impl Add<Expr> for f64 {
+    type Output = Expr;
 
-impl_scalar_left_expr_op!(i32, integer, self, Add, add);
-impl_scalar_left_expr_op!(i32, integer, self, Sub, sub);
-impl_scalar_left_expr_op!(i32, integer, self, Mul, mul);
-impl_scalar_left_expr_op!(i32, integer, self, Div, div);
+    fn add(self, rhs: Expr) -> Self::Output {
+        Expr::float(self).add(rhs)
+    }
+}
+
+impl Add<&Expr> for f64 {
+    type Output = Expr;
+
+    fn add(self, rhs: &Expr) -> Self::Output {
+        Expr::float(self).add(rhs)
+    }
+}
+
+impl Sub<Var> for f64 {
+    type Output = Expr;
+
+    fn sub(self, rhs: Var) -> Self::Output {
+        Expr::float(self).sub(rhs)
+    }
+}
+
+impl Sub<&Var> for f64 {
+    type Output = Expr;
+
+    fn sub(self, rhs: &Var) -> Self::Output {
+        Expr::float(self).sub(rhs)
+    }
+}
+
+impl Sub<Expr> for f64 {
+    type Output = Expr;
+
+    fn sub(self, rhs: Expr) -> Self::Output {
+        Expr::float(self).sub(rhs)
+    }
+}
+
+impl Sub<&Expr> for f64 {
+    type Output = Expr;
+
+    fn sub(self, rhs: &Expr) -> Self::Output {
+        Expr::float(self).sub(rhs)
+    }
+}
+
+impl Mul<Var> for f64 {
+    type Output = Expr;
+
+    fn mul(self, rhs: Var) -> Self::Output {
+        Expr::float(self).mul(rhs)
+    }
+}
+
+impl Mul<&Var> for f64 {
+    type Output = Expr;
+
+    fn mul(self, rhs: &Var) -> Self::Output {
+        Expr::float(self).mul(rhs)
+    }
+}
+
+impl Mul<Expr> for f64 {
+    type Output = Expr;
+
+    fn mul(self, rhs: Expr) -> Self::Output {
+        Expr::float(self).mul(rhs)
+    }
+}
+
+impl Mul<&Expr> for f64 {
+    type Output = Expr;
+
+    fn mul(self, rhs: &Expr) -> Self::Output {
+        Expr::float(self).mul(rhs)
+    }
+}
+
+impl Div<Var> for f64 {
+    type Output = Expr;
+
+    fn div(self, rhs: Var) -> Self::Output {
+        Expr::float(self).div(rhs)
+    }
+}
+
+impl Div<&Var> for f64 {
+    type Output = Expr;
+
+    fn div(self, rhs: &Var) -> Self::Output {
+        Expr::float(self).div(rhs)
+    }
+}
+
+impl Div<Expr> for f64 {
+    type Output = Expr;
+
+    fn div(self, rhs: Expr) -> Self::Output {
+        Expr::float(self).div(rhs)
+    }
+}
+
+impl Div<&Expr> for f64 {
+    type Output = Expr;
+
+    fn div(self, rhs: &Expr) -> Self::Output {
+        Expr::float(self).div(rhs)
+    }
+}
 
 impl Neg for Expr {
     type Output = Expr;
